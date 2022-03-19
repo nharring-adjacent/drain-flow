@@ -27,18 +27,19 @@ impl<'a> Record<'a> {
                                 .unwrap())
                 })
                 .map(|t| t.0)
+                .chain(vec![line.len()].into_iter())
                 .tuple_windows::<(_, _)>()
-                .map(|t| (t.0, t.1))
+                .map(|t| (if t.0 == 0 { t.0 } else { t.0 + 1 }, t.1))
                 .collect::<Vec<(usize, usize)>>(),
             pos: 0,
             uid: rksuid::new(None, None),
         }
     }
 
-    pub fn calc_sim_score(self, candidate: &'a LogGroup) -> u64 {
+    pub fn calc_sim_score(self, candidate: &'a Record) -> u64 {
         let pairs = self
             .into_iter()
-            .zip(candidate.event().clone().into_iter())
+            .zip(candidate.clone().into_iter())
             .collect::<Vec<(_, _)>>();
 
         let score = pairs
