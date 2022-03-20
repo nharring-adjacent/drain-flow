@@ -1,21 +1,30 @@
 pub mod tokens;
 extern crate derive_more;
-
 use itertools::Itertools;
+use lazy_static::lazy_static;
 use rksuid::rksuid;
+use std::fmt;
+use std::sync::Mutex;
+use string_interner::{DefaultSymbol, StringInterner};
 
+lazy_static! {
+    static ref INTERNER: Mutex<StringInterner> = Mutex::new(StringInterner::default());
+}
 #[derive(Clone, Debug)]
-pub struct Record<'a> {
-    pub raw_message: &'a str,
-    tokens: Vec<(usize, usize)>,
+pub struct Record {
+    interner: &'static Mutex<StringInterner>,
+    pub raw_message: DefaultSymbol,
+    tokens: Vec<DefaultSymbol>,
     pos: usize,
     pub uid: rksuid::Ksuid,
 }
-impl<'a> Record<'a> {
-    pub fn new(line: &'a str) -> Self {
+impl Record {
+    pub fn new(line: String) -> Self {
         Self {
-            raw_message: line.clone(),
+            interner: &INTERNER,
+            raw_message: INTERNER.lock().unwrap().get_or_intern(line.clone()),
             tokens: line
+                .as_str()
                 .char_indices()
                 .filter(|t| {
                     (t.0 == 0 && !t.1.is_whitespace()) // The very first char needs special handling
@@ -31,13 +40,19 @@ impl<'a> Record<'a> {
                 .chain(vec![line.len()].into_iter())
                 .tuple_windows::<(_, _)>()
                 .map(|t| (if t.0 == 0 { t.0 } else { t.0 + 1 }, t.1))
-                .collect::<Vec<(usize, usize)>>(),
+                .map(|t| {
+                    INTERNER
+                        .lock()
+                        .unwrap()
+                        .get_or_intern(line.as_str().get(t.0..t.1).unwrap().to_owned())
+                })
+                .collect::<Vec<DefaultSymbol>>(),
             pos: 0,
             uid: rksuid::new(None, None),
         }
     }
 
-    pub fn calc_sim_score(self, candidate: &'a Record) -> u64 {
+    pub fn calc_sim_score(self, candidate: &Record) -> u64 {
         let pairs = self
             .into_iter()
             .zip(candidate.clone().into_iter())
@@ -50,26 +65,47 @@ impl<'a> Record<'a> {
         score
     }
 
-    pub fn first(&'a self) -> Option<&'a str> {
-        let (start, end) = self.tokens[0];
-        self.raw_message.get(start..end)
+    pub fn first(&self) -> DefaultSymbol {
+        self.tokens[0].clone()
     }
 
-    pub fn len(&'a self) -> usize {
+    pub fn len(&self) -> usize {
         self.tokens.len()
     }
+
+    pub fn resolve(&self, sym: DefaultSymbol) -> Option<String> {
+        match self.interner.lock().unwrap().resolve(sym) {
+            Some(s) => Some(s.to_owned()),
+            None => None,
+        }
+    }
 }
-impl<'a> Iterator for Record<'a> {
-    type Item = &'a str;
-    fn next(self: &mut Record<'a>) -> Option<Self::Item> {
+
+impl Iterator for Record {
+    type Item = String;
+    fn next(self: &mut Record) -> Option<Self::Item> {
         let pos = self.pos;
         if pos >= self.tokens.len() {
             return None;
         }
 
-        let (start, end) = self.tokens[pos];
+        let sym = self.tokens[pos];
         self.pos += 1;
-        self.raw_message.get(start..end)
+        self.resolve(sym)
+    }
+}
+
+impl fmt::Display for Record {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            INTERNER
+                .lock()
+                .unwrap()
+                .resolve(self.raw_message)
+                .expect("interned strings must stay resolvable")
+        )
     }
 }
 #[cfg(test)]
@@ -78,14 +114,14 @@ mod should {
     use spectral::prelude::*;
     #[test]
     fn test_record_new() {
-        let input = "Message send failed to remote host: foo.bar.com";
-        let rec = Record::new(input);
-        assert_eq!(input, rec.raw_message);
+        let input = "Message send failed to remote host: foo.bar.com".to_string();
+        let rec = Record::new(input.clone());
+        assert_eq!(input, rec.to_string());
     }
     #[test]
     fn test_record_calc_sim_score() {
-        let input = "Message send failed to remote host: foo.bar.com";
-        let input2 = "Message send succeeded with flying colors";
+        let input = "Message send failed to remote host: foo.bar.com".to_string();
+        let input2 = "Message send succeeded with flying colors".to_string();
         let rec = Record::new(input);
         let other = Record::new(input2);
         let score = rec.calc_sim_score(&other);
@@ -93,25 +129,27 @@ mod should {
     }
     #[test]
     fn test_record_first() {
-        let input = "Message send failed to remote host: foo.bar.com";
+        let input = "Message send failed to remote host: foo.bar.com".to_string();
         let rec = Record::new(input);
-        assert_eq!(rec.first(), Some("Message"));
+        let val = rec.first();
+        assert_eq!(rec.resolve(val).unwrap(), "Message");
     }
     #[test]
     fn test_record_len() {
-        let input = "Message send failed to remote host: foo.bar.com";
+        let input = "Message send failed to remote host: foo.bar.com".to_string();
         let rec = Record::new(input);
         assert_eq!(rec.len(), 7);
     }
 
     #[test]
     fn test_into_iter() {
-        let input = "Message send failed to remote host: foo.bar.com";
+        let input = "Message send failed to remote host: foo.bar.com".to_string();
         let rec = Record::new(input.clone());
-        let tokens = rec.into_iter().collect::<Vec<&str>>();
+        let tokens = rec.into_iter().collect::<Vec<String>>();
         let words = &input
             .split(|c: char| c.is_whitespace())
-            .collect::<Vec<&str>>();
+            .map(|s| s.to_owned())
+            .collect::<Vec<String>>();
         assert_that(&tokens.iter()).contains_all_of(&words.iter());
     }
 }

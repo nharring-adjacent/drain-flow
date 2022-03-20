@@ -1,16 +1,16 @@
-use crate::record::{Record, tokens::Token};
+use crate::record::{tokens::Token, Record};
 
 #[derive(Clone, Debug)]
-pub struct LogGroup<'a> {
-    event: Record<'a>,
-    examples: Vec<Record<'a>>,
+pub struct LogGroup {
+    event: Record,
+    examples: Vec<Record>,
     wildcards: Vec<Wildcard>,
 }
 
 type Wildcard = (usize, Token);
 
-impl<'a> LogGroup<'a> {
-    pub fn new(event: Record<'a>) -> Self {
+impl LogGroup {
+    pub fn new(event: Record) -> Self {
         Self {
             event: event,
             examples: vec![],
@@ -18,16 +18,16 @@ impl<'a> LogGroup<'a> {
         }
     }
 
-    pub fn add_example(&mut self, rec: Record<'a>) {
+    pub fn add_example(&mut self, rec: Record) {
         self.examples.push(rec);
     }
-    
-    pub fn event(&self) -> &Record<'a> {
+
+    pub fn event(&self) -> &Record {
         &self.event
     }
 }
 
-impl Iterator for LogGroup<'_> {
+impl Iterator for LogGroup {
     type Item = Wildcard;
     fn next(&mut self) -> Option<Wildcard> {
         None

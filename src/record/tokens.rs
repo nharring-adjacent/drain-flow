@@ -33,43 +33,41 @@ impl PartialEq for Token {
                             return true;
                         }
                         false
-                    },
+                    }
                     TypedToken::Int(_) => {
                         if let TypedToken::Int(_) = other_val {
                             return true;
                         }
                         false
-                    },
+                    }
                     TypedToken::Float(_) => {
                         if let TypedToken::Float(_) = other_val {
                             return true;
                         }
                         true
-                    },
+                    }
                 },
             },
             Token::Value(val) => match other {
                 Token::Wildcard => true,
-                Token::TypedMatch(tm) => {
-                    match val {
-                        TypedToken::String(_) => {
-                            if let TypedToken::String(_) = tm {
-                                return true;
-                            }
-                            false 
-                        },
-                        TypedToken::Int(_) => {
-                            if let TypedToken::Int(_) = tm {
-                                return true;
-                            }
-                            false
-                        },
-                        TypedToken::Float(_) => {
-                            if let TypedToken::Float(_) = tm {
-                                return true
-                            }
-                            false
-                        },
+                Token::TypedMatch(tm) => match val {
+                    TypedToken::String(_) => {
+                        if let TypedToken::String(_) = tm {
+                            return true;
+                        }
+                        false
+                    }
+                    TypedToken::Int(_) => {
+                        if let TypedToken::Int(_) = tm {
+                            return true;
+                        }
+                        false
+                    }
+                    TypedToken::Float(_) => {
+                        if let TypedToken::Float(_) = tm {
+                            return true;
+                        }
+                        false
                     }
                 },
                 Token::Value(other_val) => match val {
@@ -102,8 +100,8 @@ impl Eq for Token {}
 #[cfg(test)]
 mod should {
     use crate::record::tokens::{Token, TypedToken};
-    use spectral::prelude::*;
     use proptest::prelude::*;
+    use spectral::prelude::*;
 
     #[test]
     fn test_wildcard_lhs() {
