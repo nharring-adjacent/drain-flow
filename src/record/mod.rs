@@ -1,7 +1,8 @@
+pub mod tokens;
+extern crate derive_more;
+
 use itertools::Itertools;
 use rksuid::rksuid;
-
-use crate::log_group::LogGroup;
 
 #[derive(Clone, Debug)]
 pub struct Record<'a> {

@@ -13,3 +13,8 @@ regex = "1.5"
 spectral = "0.6.0"
 ouroboros = "0.14.2"
 rksuid = { path = "../rksuid" }
+derive_more = "0.99.17"
+float_eq = "0.7.0"
+
+[dev-dependencies]
+proptest = "1.0.0"

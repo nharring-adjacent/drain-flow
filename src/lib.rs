@@ -42,16 +42,6 @@ impl<'a> SimpleDrain<'a> {
             .first()
             .expect("records have first tokens")
             .to_owned();
-        // let log_groups = self.base_layer
-        //     .entry(length)
-        //     .or_insert_with( || {
-        //         let mut map = HashMap::new();
-        //         map.insert(
-        //             new_record.first().expect("").to_owned(),
-        //             vec![LogGroup::new(new_record.clone())],
-        //         );
-        //         map
-        //     });
         if let Some(second_layer) = self.base_layer.get_mut(&length) {
             if let Some(log_groups) = second_layer.get_mut(&first as &str) {
                 let (score, offset) = log_groups.into_iter().enumerate().fold(
