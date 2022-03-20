@@ -1,5 +1,4 @@
 use float_eq::float_eq;
-use std::any::TypeId;
 
 #[derive(Debug, Clone)]
 pub enum Token {
@@ -19,30 +18,6 @@ pub enum TypedToken {
     Int(i64),
     /// Token containing a float
     Float(f64),
-}
-
-impl TypedToken {
-    fn is_string(&self) -> bool {
-        match self {
-            TypedToken::String(_) => true,
-            TypedToken::Int(_) => false,
-            TypedToken::Float(_) => false,
-        }
-    }
-    fn is_int(&self) -> bool {
-        match self {
-            TypedToken::String(_) => false,
-            TypedToken::Int(_) => true,
-            TypedToken::Float(_) => false,
-        }
-    }
-    fn is_float(&self) -> bool {
-        match self {
-            TypedToken::String(_) => false,
-            TypedToken::Int(_) => false,
-            TypedToken::Float(_) => true,
-        }
-    }
 }
 
 impl PartialEq for Token {
