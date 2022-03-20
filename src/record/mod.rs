@@ -69,8 +69,11 @@ impl Record {
     }
 
     #[instrument]
-    pub fn first(&self) -> DefaultSymbol {
-        self.tokens[0].clone()
+    pub fn first(&self) -> Option<DefaultSymbol> {
+        match self.tokens.len() {
+            0 => None,
+            _ => Some(self.tokens[0].clone())
+        }
     }
 
     #[instrument]
@@ -190,7 +193,7 @@ mod should {
         let input = "Message send failed to remote host: foo.bar.com".to_string();
         let rec = Record::new(input);
         let val = rec.first();
-        assert_eq!(rec.resolve(val).unwrap(), "Message");
+        assert_eq!(rec.resolve(val.unwrap()).unwrap(), "Message");
     }
 
     #[traced_test]
