@@ -11,8 +11,8 @@ fraction = "0.10.0"
 itertools = "0.10.3"
 regex = "1.5"
 spectral = "0.6.0"
-ouroboros = "0.14.2"
-rksuid = { path = "../rksuid" }
+ouroboros = "0.15.0"
+rksuid = { git = "https://github.com/nharring-adjacent/rksuid" }
 derive_more = "0.99.17"
 float_eq = "0.7.0"
 
