@@ -15,6 +15,8 @@ ouroboros = "0.14.2"
 rksuid = { path = "../rksuid" }
 derive_more = "0.99.17"
 float_eq = "0.7.0"
+string-interner = "0.14.0"
+lazy_static = "1.4.0"
 
 [dev-dependencies]
 proptest = "1.0.0"

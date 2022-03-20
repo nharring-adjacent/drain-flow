@@ -1,22 +1,25 @@
 pub mod log_group;
 pub mod record;
 
+
+use std::collections::HashMap;
+
 use anyhow::{anyhow, Error};
 use fraction::{BigInt, FromPrimitive, Ratio};
 use log_group::LogGroup;
 use record::Record;
 use regex::Regex;
-use std::collections::HashMap;
+
 
 #[derive(Debug, Clone)]
-pub struct SimpleDrain<'a> {
+pub struct SimpleDrain {
     pub domain: Vec<Regex>,
     // NumTokens -> First Token -> List of Log groups
-    base_layer: HashMap<usize, HashMap<String, Vec<LogGroup<'a>>>>,
+    base_layer: HashMap<usize, HashMap<String, Vec<LogGroup>>>,
     pub threshold: Ratio<BigInt>,
 }
 
-impl<'a> SimpleDrain<'a> {
+impl<'a> SimpleDrain {
     pub fn new(domain: Vec<String>) -> Result<Self, Error> {
         let patterns = domain
             .iter()
@@ -43,13 +46,11 @@ impl<'a> SimpleDrain<'a> {
     /// Ok(true) when a new entry is added
     /// Ok(false) when the line matched an existing entry
     /// Err(e) for errors during processing
-    pub fn process_line(&mut self, line: &'a str) -> Result<bool, Error> {
-        let new_record = Record::new(line.clone());
+    pub fn process_line(&mut self, line: String) -> Result<bool, Error> {
+        let new_record = Record::new(line);
         let length = new_record.len();
-        let first = new_record
-            .first()
-            .expect("records have first tokens")
-            .to_owned();
+        let first = new_record.first();
+        let first = new_record.resolve(first).expect("records have first tokens");
         if let Some(second_layer) = self.base_layer.get_mut(&length) {
             if let Some(log_groups) = second_layer.get_mut(&first as &str) {
                 let (score, offset) = log_groups.into_iter().enumerate().fold(
@@ -84,7 +85,7 @@ impl<'a> SimpleDrain<'a> {
                 .base_layer
                 .get_mut(&length)
                 .expect("We just inserted this map");
-            second_layer.insert(first, vec![LogGroup::new(new_record)]);
+            second_layer.insert(first.to_string(), vec![LogGroup::new(new_record)]);
             return Ok(true);
         }
         Err(anyhow!("Unspecified error occurred"))
@@ -112,7 +113,7 @@ mod should {
     #[test]
     fn test_single_process_line() {
         let mut drain = SimpleDrain::new(vec![]).unwrap();
-        let line_1 = "Message send failed to remote host: foo.bar.com";
+        let line_1 = "Message send failed to remote host: foo.bar.com".to_string();
         let res = drain.process_line(line_1);
         assert_that(&res).is_ok_containing(true);
     }
@@ -120,9 +121,9 @@ mod should {
     #[test]
     fn test_multiple_process_line() {
         let mut drain = SimpleDrain::new(vec![]).unwrap();
-        let line_1 = "Message send failed to remote host: foo.bar.com";
-        let line_2 = "Message send failed to remote host: bork.bork.com";
-        let line_3 = "Unknown error received from peer";
+        let line_1 = "Message send failed to remote host: foo.bar.com".to_string();
+        let line_2 = "Message send failed to remote host: bork.bork.com".to_string();
+        let line_3 = "Unknown error received from peer".to_string();
         let res = drain.process_line(line_1);
         assert_that(&res).is_ok_containing(true);
         let res = drain.process_line(line_2);
