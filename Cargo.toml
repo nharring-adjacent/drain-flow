@@ -1,0 +1,20 @@
+[package]
+name = "drain-flow"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.56"
+fraction = "0.10.0"
+itertools = "0.10.3"
+regex = "1.5"
+spectral = "0.6.0"
+ouroboros = "0.14.2"
+rksuid = { path = "../rksuid" }
+derive_more = "0.99.17"
+float_eq = "0.7.0"
+
+[dev-dependencies]
+proptest = "1.0.0"
