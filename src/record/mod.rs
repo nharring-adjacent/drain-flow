@@ -203,7 +203,7 @@ mod should {
 
     #[traced_test]
     #[test]
-    fn test_into_iter() {
+    fn test_consuming_iter() {
         let input = "Message send failed to remote host: foo.bar.com".to_string();
         let rec = Record::new(input.clone());
         let tokens = rec.into_iter().collect::<Vec<String>>();
@@ -212,5 +212,14 @@ mod should {
             .map(|s| s.to_owned())
             .collect::<Vec<String>>();
         assert_that(&tokens.iter()).contains_all_of(&words.iter());
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_non_consuming_iter() {
+        let input = "Message send failed to remote host: foo.bar.com".to_string();
+        let rec = Record::new(input.clone());
+        let tokens = (&rec).into_iter().collect::<Vec<_>>();
+        assert_that(&tokens).has_length(7);
     }
 }

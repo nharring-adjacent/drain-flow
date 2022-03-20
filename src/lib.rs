@@ -2,13 +2,14 @@ pub mod log_group;
 pub mod record;
 
 use std::collections::HashMap;
+use std::fmt;
 
 use anyhow::{anyhow, Error};
 use fraction::{BigInt, FromPrimitive, Ratio};
 use log_group::LogGroup;
 use record::Record;
 use regex::Regex;
-use tracing::{info, instrument};
+use tracing::instrument;
 #[derive(Debug, Clone)]
 pub struct SimpleDrain {
     pub domain: Vec<Regex>,
@@ -18,7 +19,7 @@ pub struct SimpleDrain {
 }
 
 impl<'a> SimpleDrain {
-    // #[instrument]
+    #[instrument]
     pub fn new(domain: Vec<String>) -> Result<Self, Error> {
         let patterns = domain
             .iter()
@@ -31,7 +32,7 @@ impl<'a> SimpleDrain {
         })
     }
 
-    // #[instrument]
+    #[instrument]
     pub fn set_threshold(&mut self, numerator: u64, denominator: u64) -> Result<(), Error> {
         let numer = BigInt::from_u64(numerator)
             .ok_or(anyhow!("unable to make numerator from {}", numerator))?;
@@ -48,7 +49,7 @@ impl<'a> SimpleDrain {
     /// Ok(true) when a new entry is added
     /// Ok(false) when the line matched an existing entry
     /// Err(e) for errors during processing
-    // #[instrument]
+    #[instrument]
     pub fn process_line(&mut self, line: String) -> Result<bool, Error> {
         let new_record = Record::new(line);
         let length = new_record.len();
@@ -93,6 +94,30 @@ impl<'a> SimpleDrain {
             return Ok(true);
         }
         Err(anyhow!("Unspecified error occurred"))
+    }
+
+    pub fn iter_groups(&self) -> Vec<Vec<&LogGroup>> {
+        let mut results: Vec<Vec<&LogGroup>> = Vec::new();
+        for length in self.base_layer.keys() {
+            let mut groups = vec![];
+            for (_, grp) in self.base_layer.get(length).unwrap().iter() {
+                for g in grp {
+                    groups.push(g)
+                }
+            }
+            results.push(groups);
+        }
+        results
+    }
+}
+
+impl fmt::Display for SimpleDrain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "SimpleDrain\nDomain Patterns: {:?}\nSimilarity Threshold: {}\n",
+            self.domain, self.threshold
+        )
     }
 }
 
@@ -139,5 +164,19 @@ mod should {
         assert_that(&res).is_ok_containing(false);
         let res = drain.process_line(line_3);
         assert_that!(res).is_ok_containing(true);
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_iter_groups() {
+        let line_1 = "This is a sequence".to_string();
+        let line_2 = "Another different order of words".to_string();
+        let line_3 = "Finally one last unique set of character runs".to_string();
+        let mut drain = SimpleDrain::new(vec![]).unwrap();
+        drain.process_line(line_1).unwrap();
+        drain.process_line(line_2).unwrap();
+        drain.process_line(line_3).unwrap();
+        let groups = drain.iter_groups();
+        assert_that(&groups).has_length(3);
     }
 }
