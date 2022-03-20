@@ -54,7 +54,7 @@ impl<'a> SimpleDrain {
         let new_record = Record::new(line);
         let length = new_record.len();
         let first = new_record
-            .resolve(new_record.first())
+            .resolve(new_record.first().expect("records have first tokens"))
             .expect("records have first tokens");
         match self.base_layer.get_mut(&length) {
             Some(second_layer) => {
@@ -73,7 +73,8 @@ impl<'a> SimpleDrain {
                                 acc
                             },
                         );
-                        let score_ratio = Ratio::<BigInt>::new(BigInt::from(score), BigInt::from(length));
+                        let score_ratio =
+                            Ratio::<BigInt>::new(BigInt::from(score), BigInt::from(length));
                         match score_ratio > self.threshold {
                             true => {
                                 // add this record's uid to the list of examples for the log group
@@ -93,14 +94,14 @@ impl<'a> SimpleDrain {
                 }
             }
             _ => {
-                    self.base_layer.insert(length, HashMap::new());
-                    let second_layer = self
-                        .base_layer
-                        .get_mut(&length)
-                        .expect("We just inserted this map");
-                    second_layer.insert(first.to_string(), vec![LogGroup::new(new_record)]);
-                    return Ok(true);
-                }
+                self.base_layer.insert(length, HashMap::new());
+                let second_layer = self
+                    .base_layer
+                    .get_mut(&length)
+                    .expect("We just inserted this map");
+                second_layer.insert(first.to_string(), vec![LogGroup::new(new_record)]);
+                return Ok(true);
+            }
         }
     }
 
