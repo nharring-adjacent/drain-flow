@@ -2,7 +2,7 @@ pub mod log_group;
 pub mod record;
 
 use anyhow::{anyhow, Error};
-use fraction::{BigInt, Ratio};
+use fraction::{BigInt, FromPrimitive, Ratio};
 use log_group::LogGroup;
 use record::Record;
 use regex::Regex;
@@ -27,6 +27,14 @@ impl<'a> SimpleDrain<'a> {
             base_layer: HashMap::new(),
             threshold: Ratio::from_float::<f32>(0.5).expect("0.5 converts into a ratio"),
         })
+    }
+
+    pub fn set_threshold(&mut self, numerator: u64, denominator: u64) -> Result<(), Error> {
+        let numer = BigInt::from_u64(numerator).ok_or(anyhow!("unable to make numerator from {}", numerator))?;
+        let denom = BigInt::from_u64(denominator).ok_or(anyhow!("unable to make denominator from {}", denominator))?;
+        let new_ratio = Ratio::new(numer, denom);
+        self.threshold = new_ratio;
+        Ok(())
     }
 
     /// Accepts a line of input for processing against existing records
@@ -92,6 +100,13 @@ mod should {
     fn test_new_drain() {
         let drain = SimpleDrain::new(vec![]);
         assert_that(&drain).is_ok();
+    }
+
+    #[test]
+    fn test_set_threshold() {
+        let mut drain = SimpleDrain::new(vec![]).unwrap();
+        let res = drain.set_threshold(100, 200);
+        assert_that(&res).is_ok();
     }
 
     #[test]
