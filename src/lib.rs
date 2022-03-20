@@ -56,44 +56,52 @@ impl<'a> SimpleDrain {
         let first = new_record
             .resolve(new_record.first())
             .expect("records have first tokens");
-        if let Some(second_layer) = self.base_layer.get_mut(&length) {
-            if let Some(log_groups) = second_layer.get_mut(&first as &str) {
-                let (score, offset) = log_groups.into_iter().enumerate().fold(
-                    (
-                        0, // best score
-                        0, // index of best score LogGroup
-                    ),
-                    |mut acc, elem| {
-                        let score = new_record.clone().calc_sim_score(elem.1.event());
-                        if score > acc.0 {
-                            acc = (score, elem.0); // overwrite state with new values
+        match self.base_layer.get_mut(&length) {
+            Some(second_layer) => {
+                match second_layer.get_mut(&first as &str) {
+                    Some(log_groups) => {
+                        let (score, offset) = log_groups.into_iter().enumerate().fold(
+                            (
+                                0, // best score
+                                0, // index of best score LogGroup
+                            ),
+                            |mut acc, elem| {
+                                let score = new_record.clone().calc_sim_score(elem.1.event());
+                                if score > acc.0 {
+                                    acc = (score, elem.0); // overwrite state with new values
+                                }
+                                acc
+                            },
+                        );
+                        let score_ratio = Ratio::<BigInt>::new(BigInt::from(score), BigInt::from(length));
+                        match score_ratio > self.threshold {
+                            true => {
+                                // add this record's uid to the list of examples for the log group
+                                log_groups[offset].add_example(new_record);
+                                return Ok(false);
+                            }
+                            false => {
+                                log_groups.push(LogGroup::new(new_record));
+                                return Ok(true);
+                            }
                         }
-                        acc
-                    },
-                );
-                let score_ratio = Ratio::<BigInt>::new(BigInt::from(score), BigInt::from(length));
-                match score_ratio > self.threshold {
-                    true => {
-                        // add this record's uid to the list of examples for the log group
-                        log_groups[offset].add_example(new_record);
-                        return Ok(false);
                     }
-                    false => {
-                        log_groups.push(LogGroup::new(new_record));
+                    None => {
+                        second_layer.insert(first, vec![LogGroup::new(new_record)]);
                         return Ok(true);
                     }
                 }
             }
-        } else {
-            self.base_layer.insert(length, HashMap::new());
-            let second_layer = self
-                .base_layer
-                .get_mut(&length)
-                .expect("We just inserted this map");
-            second_layer.insert(first.to_string(), vec![LogGroup::new(new_record)]);
-            return Ok(true);
+            _ => {
+                    self.base_layer.insert(length, HashMap::new());
+                    let second_layer = self
+                        .base_layer
+                        .get_mut(&length)
+                        .expect("We just inserted this map");
+                    second_layer.insert(first.to_string(), vec![LogGroup::new(new_record)]);
+                    return Ok(true);
+                }
         }
-        Err(anyhow!("Unspecified error occurred"))
     }
 
     pub fn iter_groups(&self) -> Vec<Vec<&LogGroup>> {
