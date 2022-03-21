@@ -125,8 +125,15 @@ impl fmt::Display for SimpleDrain {
         write!(
             f,
             "SimpleDrain\nDomain Patterns: {:?}\nSimilarity Threshold: {}\n",
-            self.domain, self.threshold
-        )
+            self.domain, self.threshold,
+        ).unwrap();
+        write!(f, "Log Groups:").unwrap();
+        for group in self.iter_groups() {
+            for inner in group {
+                write!(f, "{}\n", inner).unwrap();
+            }
+        }
+        write!(f, "")
     }
 }
 
