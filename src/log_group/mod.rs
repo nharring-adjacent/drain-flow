@@ -38,8 +38,9 @@ impl fmt::Display for LogGroup {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "LogGroup {:?}\nEvent: {}\n{} examples and {} wildcards\n",
-            self.event.uid,
+            "LogGroup ID: {}\nFirst Seen: {}\nEvent: {}\n{} examples and {} wildcards\n",
+            self.event.uid.serialize(),
+            self.event.uid.get_time(),
             self.event.to_string(),
             self.examples.len(),
             self.wildcards.len()
