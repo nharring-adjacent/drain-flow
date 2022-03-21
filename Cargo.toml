@@ -18,6 +18,7 @@ float_eq = "0.7.0"
 string-interner = "0.14.0"
 lazy_static = "1.4.0"
 tracing = "0.1.32"
+joinery = "2.1.0"
 
 [dev-dependencies]
 proptest = "1.0.0"

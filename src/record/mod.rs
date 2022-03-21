@@ -72,7 +72,7 @@ impl Record {
     pub fn first(&self) -> Option<DefaultSymbol> {
         match self.tokens.len() {
             0 => None,
-            _ => Some(self.tokens[0].clone())
+            _ => Some(self.tokens[0].clone()),
         }
     }
 
