@@ -6,6 +6,7 @@ use std::fmt;
 
 use anyhow::{anyhow, Error};
 use fraction::{BigInt, FromPrimitive, Ratio};
+use joinery::{Joinable, JoinableIterator};
 use log_group::LogGroup;
 use record::Record;
 use regex::Regex;
@@ -51,6 +52,9 @@ impl<'a> SimpleDrain {
     /// Err(e) for errors during processing
     #[instrument]
     pub fn process_line(&mut self, line: String) -> Result<bool, Error> {
+        if line.len() == 0 {
+            return Ok(false)
+        }
         let new_record = Record::new(line);
         let length = new_record.len();
         let first = new_record
@@ -122,18 +126,19 @@ impl<'a> SimpleDrain {
 
 impl fmt::Display for SimpleDrain {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
+        let base = format!(
             "SimpleDrain\nDomain Patterns: {:?}\nSimilarity Threshold: {}\n",
-            self.domain, self.threshold,
-        ).unwrap();
-        write!(f, "Log Groups:").unwrap();
-        for group in self.iter_groups() {
-            for inner in group {
-                write!(f, "{}\n", inner).unwrap();
-            }
-        }
-        write!(f, "")
+            self.domain, self.threshold
+        );
+        let lg = "Log Groups:\n".to_string();
+        let groups = self
+            .iter_groups()
+            .iter()
+            .flatten()
+            .map(|e| e.to_string())
+            .collect::<Vec<String>>();
+        let group_str = groups.iter().join_with("\n");
+        write!(f, "{}", [base, lg, group_str.to_string()].join_concat())
     }
 }
 
