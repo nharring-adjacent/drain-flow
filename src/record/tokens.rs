@@ -1,4 +1,4 @@
-use std::{fmt, collections::HashMap};
+use std::{collections::HashMap, fmt};
 
 use crate::INTERNER;
 use anyhow::Error;
@@ -15,7 +15,6 @@ lazy_static! {
     static ref MATCHERS: RegexSet = Grokker::build_pattern_set();
     static ref GROKKER_COUNT: usize = Grokker::iter_variants().count() - 1;
     static ref GROKKER_SYMS: HashMap<Grokker, DefaultSymbol> = symbolize_grokker();
-    
 }
 
 fn symbolize_grokker() -> HashMap<Grokker, DefaultSymbol> {
@@ -44,7 +43,7 @@ custom_derive! {
 }
 
 impl Grokker {
-    fn to_pattern(&self) -> String {
+    fn to_pattern(self) -> String {
         match self {
             Grokker::Base10Integer => r"(?:[+-]?(?:[0-9]+))".to_string(),
             Grokker::Base10Float => {
@@ -126,7 +125,9 @@ impl From<Token> for DefaultSymbol {
     fn from(tok: Token) -> DefaultSymbol {
         match tok {
             Token::Wildcard => *ASTERISK,
-            Token::TypedMatch(t) => *GROKKER_SYMS.get(&t).expect("every grokker must have a symbol"),
+            Token::TypedMatch(t) => *GROKKER_SYMS
+                .get(&t)
+                .expect("every grokker must have a symbol"),
             Token::Value(v) => match v {
                 TypedToken::String(s) => s,
                 TypedToken::Int(i) => INTERNER.write().get_or_intern(i.to_string()),
@@ -208,6 +209,10 @@ impl TokenStream {
         self.inner.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
     pub fn get_token_at_index(&self, idx: usize) -> Option<Token> {
         match idx < self.inner.len() {
             true => Some(self.inner[idx].1.clone()),
@@ -281,9 +286,7 @@ mod should {
     #[test]
     fn test_wildcard_lhs() {
         let lhs = Token::Wildcard;
-        let rhs = Token::Value(TypedToken::String(
-            INTERNER.write().get_or_intern("foo"),
-        ));
+        let rhs = Token::Value(TypedToken::String(INTERNER.write().get_or_intern("foo")));
         assert_that(&lhs).is_equal_to(rhs.clone());
         assert_that(&rhs).is_equal_to(lhs);
     }

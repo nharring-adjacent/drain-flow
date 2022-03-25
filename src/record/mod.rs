@@ -1,21 +1,20 @@
 pub mod tokens;
 extern crate derive_more;
 
-use std::{fmt};
+use std::fmt;
 
 use crate::INTERNER;
 
 use lazy_static::lazy_static;
 
 use rksuid::rksuid;
-use string_interner::{DefaultSymbol};
-use tracing::{instrument};
+use string_interner::DefaultSymbol;
+use tracing::instrument;
 
 use self::tokens::{Token, TokenStream, TypedToken};
 
 lazy_static! {
     static ref ASTERISK: DefaultSymbol = INTERNER.write().get_or_intern_static("*");
-    
 }
 #[derive(Clone, Debug)]
 pub struct Record {
@@ -53,6 +52,10 @@ impl Record {
     #[instrument]
     pub fn len(&self) -> usize {
         self.inner.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.len() == 0
     }
 
     #[instrument]

@@ -27,7 +27,11 @@ impl LogGroup {
 
     #[instrument]
     pub fn add_example(&mut self, rec: Record) {
+        let vars = self.discover_variables(&rec).unwrap();
         self.examples.push(rec);
+        if !vars.is_empty() {
+            self.updaate_variables(vars);
+        }
     }
 
     #[instrument]
@@ -35,7 +39,7 @@ impl LogGroup {
         &self.event
     }
 
-    fn discover_variables(&self, rec: &Record) -> Result<Vec<Wildcard>, Error> {
+    pub fn discover_variables(&self, rec: &Record) -> Result<Vec<Wildcard>, Error> {
         let f = self
             .event
             .borrow()
@@ -43,7 +47,7 @@ impl LogGroup {
             .enumerate()
             .zip(rec.into_iter())
             .filter(|((idx, event), candidate)| {
-                if let Some(_) = self.variables.get(idx) {
+                if self.variables.get(idx).is_some() {
                     // This token has already been identified as a variable
                     false
                 } else if event != candidate {
@@ -53,7 +57,7 @@ impl LogGroup {
                     false
                 }
             })
-            .filter_map(|((idx, _event), _candidate)| Some((idx, Token::Wildcard)))
+            .map(|((idx, _event), _candidate)| (idx, Token::Wildcard))
             .collect::<Vec<_>>();
         Ok(f)
     }
@@ -86,7 +90,7 @@ mod should {
         log_group::LogGroup,
         record::{tokens::Token, Record},
     };
-    
+
     use spectral::prelude::*;
     use std::collections::HashMap;
 

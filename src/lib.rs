@@ -51,9 +51,9 @@ impl<'a> SimpleDrain {
     #[instrument]
     pub fn set_threshold(&mut self, numerator: u64, denominator: u64) -> Result<(), Error> {
         let numer = BigInt::from_u64(numerator)
-            .ok_or(anyhow!("unable to make numerator from {}", numerator))?;
+            .ok_or_else(|| anyhow!("unable to make numerator from {}", numerator))?;
         let denom = BigInt::from_u64(denominator)
-            .ok_or(anyhow!("unable to make denominator from {}", denominator))?;
+            .ok_or_else(|| anyhow!("unable to make denominator from {}", denominator))?;
         let new_ratio = Ratio::new(numer, denom);
         self.threshold = new_ratio;
         Ok(())
@@ -122,6 +122,7 @@ impl<'a> SimpleDrain {
         }
     }
 
+    #[instrument]
     pub fn iter_groups(&self) -> Vec<Vec<&LogGroup>> {
         let mut results: Vec<Vec<&LogGroup>> = Vec::new();
         for length in self.base_layer.keys() {
@@ -136,6 +137,7 @@ impl<'a> SimpleDrain {
         results
     }
 
+    #[instrument]
     pub fn resolve(&self, sym: DefaultSymbol) -> String {
         self.strings
             .read()
