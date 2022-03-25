@@ -1,17 +1,17 @@
 pub mod tokens;
 extern crate derive_more;
 
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{fmt};
 
 use crate::INTERNER;
-use itertools::Itertools;
-use lazy_static::lazy_static;
-use parking_lot::RwLock;
-use rksuid::rksuid;
-use string_interner::{DefaultSymbol, StringInterner};
-use tracing::{info, instrument};
 
-use self::tokens::{Grokker, Token, TokenStream, TypedToken};
+use lazy_static::lazy_static;
+
+use rksuid::rksuid;
+use string_interner::{DefaultSymbol};
+use tracing::{instrument};
+
+use self::tokens::{Token, TokenStream, TypedToken};
 
 lazy_static! {
     static ref ASTERISK: DefaultSymbol = INTERNER.write().get_or_intern_static("*");
@@ -47,10 +47,7 @@ impl Record {
 
     #[instrument]
     pub fn first(&self) -> Option<DefaultSymbol> {
-        match self.inner.first() {
-            Some(f) => Some(f.into()),
-            None => None,
-        }
+        self.inner.first().map(|f| f.into())
     }
 
     #[instrument]
@@ -60,10 +57,7 @@ impl Record {
 
     #[instrument]
     pub fn resolve(sym: DefaultSymbol) -> Option<String> {
-        match INTERNER.read().resolve(sym) {
-            Some(s) => Some(s.to_owned()),
-            None => None,
-        }
+        INTERNER.read().resolve(sym).map(|s| s.to_owned())
     }
 }
 
@@ -202,7 +196,7 @@ mod should {
     #[test]
     fn test_non_consuming_iter() {
         let input = "Message send failed to remote host: foo.bar.com".to_string();
-        let rec = Record::new(input.clone());
+        let rec = Record::new(input);
         let tokens = (&rec).into_iter().collect::<Vec<_>>();
         assert_that(&tokens).has_length(7);
     }

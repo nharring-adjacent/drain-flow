@@ -38,7 +38,7 @@ impl<'a> SimpleDrain {
     pub fn new(domain: Vec<String>) -> Result<Self, Error> {
         let patterns = domain
             .iter()
-            .map(|s| Regex::new(&s))
+            .map(|s| Regex::new(s))
             .collect::<Result<Vec<Regex>, regex::Error>>()?;
         Ok(Self {
             domain: patterns,
@@ -67,7 +67,7 @@ impl<'a> SimpleDrain {
     /// Err(e) for errors during processing
     #[instrument]
     pub fn process_line(&mut self, line: String) -> Result<bool, Error> {
-        if line.len() == 0 {
+        if line.is_empty() {
             return Ok(false);
         }
         let new_record = Record::new(line);
@@ -77,7 +77,7 @@ impl<'a> SimpleDrain {
             Some(second_layer) => {
                 match second_layer.get_mut(&first) {
                     Some(log_groups) => {
-                        let (score, offset) = log_groups.into_iter().enumerate().fold(
+                        let (score, offset) = log_groups.iter_mut().enumerate().fold(
                             (
                                 0, // best score
                                 0, // index of best score LogGroup
@@ -96,17 +96,17 @@ impl<'a> SimpleDrain {
                             true => {
                                 // add this record's uid to the list of examples for the log group
                                 log_groups[offset].add_example(new_record);
-                                return Ok(false);
+                                Ok(false)
                             }
                             false => {
                                 log_groups.push(LogGroup::new(new_record));
-                                return Ok(true);
+                                Ok(true)
                             }
                         }
                     }
                     None => {
                         second_layer.insert(first, vec![LogGroup::new(new_record)]);
-                        return Ok(true);
+                        Ok(true)
                     }
                 }
             }
@@ -117,7 +117,7 @@ impl<'a> SimpleDrain {
                     .get_mut(&length)
                     .expect("We just inserted this map");
                 second_layer.insert(first, vec![LogGroup::new(new_record)]);
-                return Ok(true);
+                Ok(true)
             }
         }
     }

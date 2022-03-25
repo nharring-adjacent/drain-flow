@@ -175,8 +175,7 @@ impl TokenStream {
                     && line
                         .chars()
                         .clone()
-                        .nth(t.0 - 1)
-                        .and_then(|c| Some(!c.is_whitespace()))
+                        .nth(t.0 - 1).map(|c| !c.is_whitespace())
                         .unwrap())
             })
             .map(|t| t.0)
@@ -190,7 +189,7 @@ impl TokenStream {
                         end: t.1,
                     },
                     Token::Value(TypedToken::String(
-                        interner.get_or_intern(line.get(t.0..t.1).unwrap().to_owned()),
+                        interner.get_or_intern(line.get(t.0..t.1).unwrap()),
                     )),
                 )
             })
@@ -225,13 +224,13 @@ impl fmt::Display for TokenStream {
             .iter()
             .map(|(_offset, token)| token)
             .join_with(" ");
-        write!(f, "{}", disp.to_string())
+        write!(f, "{}", disp)
     }
 }
 
 impl PartialEq for Token {
     fn eq(&self, other: &Self) -> bool {
-        return match self {
+        match self {
             Token::Wildcard => true,
             Token::TypedMatch(tm) => match other {
                 Token::Wildcard => true,
@@ -266,7 +265,7 @@ impl PartialEq for Token {
                     }
                 },
             },
-        };
+        }
     }
 }
 
@@ -283,7 +282,7 @@ mod should {
     fn test_wildcard_lhs() {
         let lhs = Token::Wildcard;
         let rhs = Token::Value(TypedToken::String(
-            INTERNER.write().get_or_intern("foo".to_string()),
+            INTERNER.write().get_or_intern("foo"),
         ));
         assert_that(&lhs).is_equal_to(rhs.clone());
         assert_that(&rhs).is_equal_to(lhs);

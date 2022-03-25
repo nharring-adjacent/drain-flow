@@ -19,7 +19,7 @@ impl LogGroup {
     #[instrument]
     pub fn new(event: Record) -> Self {
         Self {
-            event: event,
+            event,
             examples: vec![],
             variables: HashMap::new(),
         }
@@ -46,16 +46,14 @@ impl LogGroup {
                 if let Some(_) = self.variables.get(idx) {
                     // This token has already been identified as a variable
                     false
+                } else if event != candidate {
+                    info!(%idx, ?event, ?candidate, "found candidate");
+                    true
                 } else {
-                    if event != candidate {
-                        info!(%idx, ?event, ?candidate, "found candidate");
-                        true
-                    } else {
-                        false
-                    }
+                    false
                 }
             })
-            .filter_map(|((idx, event), candidate)| Some((idx, Token::Wildcard)))
+            .filter_map(|((idx, _event), _candidate)| Some((idx, Token::Wildcard)))
             .collect::<Vec<_>>();
         Ok(f)
     }
@@ -75,7 +73,7 @@ impl fmt::Display for LogGroup {
             "LogGroup ID: {}\nFirst Seen: {}\nEvent: {}\n{} examples and {} wildcards\n",
             self.event.uid.serialize(),
             self.event.uid.get_time(),
-            self.event.to_string(),
+            self.event,
             self.examples.len(),
             self.variables.len()
         )
@@ -88,7 +86,7 @@ mod should {
         log_group::LogGroup,
         record::{tokens::Token, Record},
     };
-    use proptest::prelude::*;
+    
     use spectral::prelude::*;
     use std::collections::HashMap;
 
