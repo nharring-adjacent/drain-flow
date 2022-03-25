@@ -2,7 +2,7 @@ name: Rust Benchmark
 on:
   push:
     branches:
-      - master
+      - trunk
 
 permissions:
   contents: write
