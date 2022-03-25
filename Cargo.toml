@@ -7,18 +7,22 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.56"
+custom_derive = "0.1.7"
+derive_more = "0.99.17"
+enum_derive = "0.1.7"
+float_eq = "0.7.0"
 fraction = "0.10.0"
 itertools = "0.10.3"
-regex = "1.5"
-spectral = "0.6.0"
-ouroboros = "0.15.0"
-rksuid = { git = "https://github.com/nharring-adjacent/rksuid" }
-derive_more = "0.99.17"
-float_eq = "0.7.0"
-string-interner = "0.14.0"
 lazy_static = "1.4.0"
-tracing = "0.1.32"
 joinery = "2.1.0"
+ouroboros = "0.15.0"
+parking_lot = { version = "0.12.0", features = ["hardware-lock-elision", "send_guard"]}
+regex = "1.5"
+rksuid = { git = "https://github.com/nharring-adjacent/rksuid" }
+spectral = "0.6.0"
+string-interner = "0.14.0"
+tracing = "0.1.32"
+
 
 [dev-dependencies]
 proptest = "1.0.0"

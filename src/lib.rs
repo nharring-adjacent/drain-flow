@@ -1,22 +1,36 @@
+#[macro_use]
+extern crate custom_derive;
+#[macro_use]
+extern crate enum_derive;
+
 pub mod log_group;
 pub mod record;
 
-use std::collections::HashMap;
 use std::fmt;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Error};
 use fraction::{BigInt, FromPrimitive, Ratio};
 use joinery::{Joinable, JoinableIterator};
+use lazy_static::lazy_static;
 use log_group::LogGroup;
+use parking_lot::RwLock;
 use record::Record;
 use regex::Regex;
+use string_interner::{DefaultSymbol, StringInterner};
 use tracing::instrument;
+
+lazy_static! {
+    pub(crate) static ref INTERNER: Arc<RwLock<StringInterner>> =
+        Arc::new(RwLock::new(StringInterner::default()));
+}
 #[derive(Debug, Clone)]
 pub struct SimpleDrain {
     pub domain: Vec<Regex>,
     // NumTokens -> First Token -> List of Log groups
-    base_layer: HashMap<usize, HashMap<String, Vec<LogGroup>>>,
+    base_layer: HashMap<usize, HashMap<DefaultSymbol, Vec<LogGroup>>>,
     pub threshold: Ratio<BigInt>,
+    strings: Arc<RwLock<StringInterner>>,
 }
 
 impl<'a> SimpleDrain {
@@ -24,12 +38,13 @@ impl<'a> SimpleDrain {
     pub fn new(domain: Vec<String>) -> Result<Self, Error> {
         let patterns = domain
             .iter()
-            .map(|s| Regex::new(&s))
+            .map(|s| Regex::new(s))
             .collect::<Result<Vec<Regex>, regex::Error>>()?;
         Ok(Self {
             domain: patterns,
             base_layer: HashMap::new(),
             threshold: Ratio::from_float::<f32>(0.5).expect("0.5 converts into a ratio"),
+            strings: INTERNER.clone(),
         })
     }
 
@@ -52,19 +67,17 @@ impl<'a> SimpleDrain {
     /// Err(e) for errors during processing
     #[instrument]
     pub fn process_line(&mut self, line: String) -> Result<bool, Error> {
-        if line.len() == 0 {
-            return Ok(false)
+        if line.is_empty() {
+            return Ok(false);
         }
         let new_record = Record::new(line);
         let length = new_record.len();
-        let first = new_record
-            .resolve(new_record.first().expect("records have first tokens"))
-            .expect("records have first tokens");
+        let first = new_record.first().expect("records have first tokens");
         match self.base_layer.get_mut(&length) {
             Some(second_layer) => {
-                match second_layer.get_mut(&first as &str) {
+                match second_layer.get_mut(&first) {
                     Some(log_groups) => {
-                        let (score, offset) = log_groups.into_iter().enumerate().fold(
+                        let (score, offset) = log_groups.iter_mut().enumerate().fold(
                             (
                                 0, // best score
                                 0, // index of best score LogGroup
@@ -83,17 +96,17 @@ impl<'a> SimpleDrain {
                             true => {
                                 // add this record's uid to the list of examples for the log group
                                 log_groups[offset].add_example(new_record);
-                                return Ok(false);
+                                Ok(false)
                             }
                             false => {
                                 log_groups.push(LogGroup::new(new_record));
-                                return Ok(true);
+                                Ok(true)
                             }
                         }
                     }
                     None => {
                         second_layer.insert(first, vec![LogGroup::new(new_record)]);
-                        return Ok(true);
+                        Ok(true)
                     }
                 }
             }
@@ -103,8 +116,8 @@ impl<'a> SimpleDrain {
                     .base_layer
                     .get_mut(&length)
                     .expect("We just inserted this map");
-                second_layer.insert(first.to_string(), vec![LogGroup::new(new_record)]);
-                return Ok(true);
+                second_layer.insert(first, vec![LogGroup::new(new_record)]);
+                Ok(true)
             }
         }
     }
@@ -121,6 +134,14 @@ impl<'a> SimpleDrain {
             results.push(groups);
         }
         results
+    }
+
+    pub fn resolve(&self, sym: DefaultSymbol) -> String {
+        self.strings
+            .read()
+            .resolve(sym)
+            .expect("symbols must resolve")
+            .to_owned()
     }
 }
 
