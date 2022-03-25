@@ -122,6 +122,7 @@ impl<'a> SimpleDrain {
         }
     }
 
+    #[instrument]
     pub fn iter_groups(&self) -> Vec<Vec<&LogGroup>> {
         let mut results: Vec<Vec<&LogGroup>> = Vec::new();
         for length in self.base_layer.keys() {
@@ -136,6 +137,7 @@ impl<'a> SimpleDrain {
         results
     }
 
+    #[instrument]
     pub fn resolve(&self, sym: DefaultSymbol) -> String {
         self.strings
             .read()

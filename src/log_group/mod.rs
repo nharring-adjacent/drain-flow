@@ -27,7 +27,11 @@ impl LogGroup {
 
     #[instrument]
     pub fn add_example(&mut self, rec: Record) {
+        let vars = self.discover_variables(&rec).unwrap();
         self.examples.push(rec);
+        if vars.len() > 0 {
+            self.updaate_variables(vars);
+        }
     }
 
     #[instrument]
@@ -35,7 +39,7 @@ impl LogGroup {
         &self.event
     }
 
-    fn discover_variables(&self, rec: &Record) -> Result<Vec<Wildcard>, Error> {
+    pub fn discover_variables(&self, rec: &Record) -> Result<Vec<Wildcard>, Error> {
         let f = self
             .event
             .borrow()

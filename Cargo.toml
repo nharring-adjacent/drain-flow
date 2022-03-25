@@ -25,6 +25,11 @@ tracing = "0.1.32"
 
 
 [dev-dependencies]
+criterion = "0.3"
 proptest = "1.0.0"
 tracing-test = "0.2.1"
+
+[[bench]]
+name = "core_benchmarks"
+harness = false
 
