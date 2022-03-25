@@ -1,3 +1,5 @@
+[![Cargo Tests](https://github.com/nharring-adjacent/drain-flow/actions/workflows/rust.yml/badge.svg)](https://github.com/nharring-adjacent/drain-flow/actions/workflows/rust.yml)
+[![GitHub Super-Linter](https://github.com/nharring-adjacent/drain-flow/workflows/Lint%20Code%20Base/badge.svg)](https://github.com/marketplace/actions/super-linter)
 # Drain Flow
 
 Implementations of [Drain](https://jiemingzhu.github.io/pub/pjhe_icws2017.pdf) starting with an extremely naive single level approach and building towards a hopefully highly efficient implementation using [DifferentialDataflow](https://github.com/TimelyDataflow/differential-dataflow) with arbitrary depth.
