@@ -43,7 +43,7 @@ custom_derive! {
 }
 
 impl Grokker {
-    fn to_pattern(&self) -> String {
+    fn to_pattern(self) -> String {
         match self {
             Grokker::Base10Integer => r"(?:[+-]?(?:[0-9]+))".to_string(),
             Grokker::Base10Float => {
@@ -207,6 +207,10 @@ impl TokenStream {
 
     pub fn len(&self) -> usize {
         self.inner.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
     }
 
     pub fn get_token_at_index(&self, idx: usize) -> Option<Token> {

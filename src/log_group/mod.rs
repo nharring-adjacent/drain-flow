@@ -47,7 +47,7 @@ impl LogGroup {
             .enumerate()
             .zip(rec.into_iter())
             .filter(|((idx, event), candidate)| {
-                if let Some(_) = self.variables.get(idx) {
+                if self.variables.get(idx).is_some() {
                     // This token has already been identified as a variable
                     false
                 } else if event != candidate {
@@ -57,7 +57,7 @@ impl LogGroup {
                     false
                 }
             })
-            .filter_map(|((idx, _event), _candidate)| Some((idx, Token::Wildcard)))
+            .map(|((idx, _event), _candidate)| (idx, Token::Wildcard))
             .collect::<Vec<_>>();
         Ok(f)
     }

@@ -54,6 +54,10 @@ impl Record {
         self.inner.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.inner.len() == 0
+    }
+
     #[instrument]
     pub fn resolve(sym: DefaultSymbol) -> Option<String> {
         INTERNER.read().resolve(sym).map(|s| s.to_owned())
