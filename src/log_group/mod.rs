@@ -29,7 +29,7 @@ impl LogGroup {
     pub fn add_example(&mut self, rec: Record) {
         let vars = self.discover_variables(&rec).unwrap();
         self.examples.push(rec);
-        if vars.len() > 0 {
+        if !vars.is_empty() {
             self.updaate_variables(vars);
         }
     }
@@ -90,7 +90,7 @@ mod should {
         log_group::LogGroup,
         record::{tokens::Token, Record},
     };
-    
+
     use spectral::prelude::*;
     use std::collections::HashMap;
 
