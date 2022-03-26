@@ -8,6 +8,7 @@ use joinery::JoinableIterator;
 use lazy_static::lazy_static;
 use regex::RegexSet;
 use string_interner::DefaultSymbol;
+use tracing::instrument;
 
 use super::ASTERISK;
 
@@ -166,6 +167,7 @@ pub struct TokenStream {
 }
 
 impl TokenStream {
+    #[instrument]
     pub fn from_line(line: &str) -> Self {
         let mut interner = INTERNER.write();
         let tokens = line
@@ -198,6 +200,7 @@ impl TokenStream {
         Self { inner: tokens }
     }
 
+    #[instrument]
     pub fn first(&self) -> Option<Token> {
         match self.inner.len() {
             0 => None,
@@ -205,14 +208,17 @@ impl TokenStream {
         }
     }
 
+    #[instrument]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
+    #[instrument]
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
+    #[instrument]
     pub fn get_token_at_index(&self, idx: usize) -> Option<Token> {
         match idx < self.inner.len() {
             true => Some(self.inner[idx].1.clone()),
