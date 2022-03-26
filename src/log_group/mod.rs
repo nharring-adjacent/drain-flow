@@ -39,6 +39,7 @@ impl LogGroup {
         &self.event
     }
 
+    #[instrument]
     pub fn discover_variables(&self, rec: &Record) -> Result<Vec<Wildcard>, Error> {
         let f = self
             .event
@@ -62,11 +63,27 @@ impl LogGroup {
         Ok(f)
     }
 
+    #[instrument]
     fn updaate_variables(&mut self, vars: Vec<(usize, Token)>) {
         for var in vars {
             // Assume we got vars from discover_variab les so it has already checked against this map
             self.variables.insert(var.0, var.1);
         }
+    }
+
+    #[instrument]
+    pub fn len(&self) -> usize {
+        self.examples.len()
+    }
+
+    #[instrument]
+    pub fn is_empty(&self) -> bool {
+        self.examples.is_empty()
+    }
+
+    #[instrument]
+    pub fn get_examples(&self) -> Vec<Record> {
+        self.examples.clone()
     }
 }
 
