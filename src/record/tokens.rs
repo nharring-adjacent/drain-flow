@@ -8,7 +8,7 @@ use joinery::JoinableIterator;
 use lazy_static::lazy_static;
 use regex::RegexSet;
 use string_interner::DefaultSymbol;
-use tracing::instrument;
+use tracing::{debug, info, instrument};
 
 use super::ASTERISK;
 
@@ -44,7 +44,7 @@ custom_derive! {
 }
 
 impl Grokker {
-    fn to_pattern(self) -> String {
+    pub fn to_pattern(self) -> String {
         match self {
             Grokker::Base10Integer => r"(?:[+-]?(?:[0-9]+))".to_string(),
             Grokker::Base10Float => {
@@ -167,37 +167,31 @@ pub struct TokenStream {
 }
 
 impl TokenStream {
-    #[instrument]
-    pub fn from_line(line: &str) -> Self {
+    pub fn from_unicode_line(line: &str) -> Self {
         let mut interner = INTERNER.write();
-        let tokens = line
-            .char_indices()
-            .filter(|t| {
-                (t.0 == 0 && !t.1.is_whitespace()) // The very first char needs special handling
-                || (t.1.is_whitespace()
-                    && line
-                        .chars()
-                        .clone()
-                        .nth(t.0 - 1).map(|c| !c.is_whitespace())
-                        .unwrap())
-            })
-            .map(|t| t.0)
-            .chain(vec![line.len()].into_iter())
-            .tuple_windows::<(_, _)>()
-            .map(|t| (if t.0 == 0 { t.0 } else { t.0 + 1 }, t.1))
-            .map(|t| {
-                (
+        let mut progress = 0usize;
+        let words = line
+            .split_ascii_whitespace()
+            .filter_map(|w| {
+                debug!(%w, %progress, "got");
+                let start = line.match_indices(w).find(|(i, _w)| {
+                    debug!(%progress, %i, "found");
+                    i >= &progress
+                })?;
+                let end = start.0 + start.1.len();
+                progress = end;
+                let token = (
                     Offset {
-                        start: t.0,
-                        end: t.1,
+                        start: start.0,
+                        end: end,
                     },
-                    Token::Value(TypedToken::String(
-                        interner.get_or_intern(line.get(t.0..t.1).unwrap()),
-                    )),
-                )
+                    Token::Value(TypedToken::String(interner.get_or_intern(w))),
+                );
+                debug!(?token, %w, ?start, "built");
+                Some(token)
             })
             .collect::<Vec<(Offset, Token)>>();
-        Self { inner: tokens }
+        Self { inner: words }
     }
 
     #[instrument]
@@ -229,13 +223,27 @@ impl TokenStream {
 
 impl fmt::Display for TokenStream {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        //TODO: make use of offset to correctly restore whitespace
-        let disp = self
+        let words = self
             .inner
             .iter()
-            .map(|(_offset, token)| token)
-            .join_with(" ");
-        write!(f, "{}", disp)
+            .map(|(_, t)| t.to_string())
+            .collect::<Vec<String>>();
+        let whitespace = self
+            .inner
+            .iter()
+            .tuple_windows()
+            .map(|(first, second)| (first.0.end, second.0.start))
+            .map(|t| " ".repeat(t.1 - t.0).to_string())
+            .collect::<Vec<String>>();
+        write!(
+            f,
+            "{}",
+            words
+                .iter()
+                .interleave(whitespace.iter())
+                .join_concat()
+                .to_string()
+        )
     }
 }
 
@@ -286,6 +294,7 @@ impl Eq for Token {}
 mod should {
     use crate::record::tokens::{Token, TypedToken};
     use crate::INTERNER;
+
     use proptest::prelude::*;
     use spectral::prelude::*;
 
@@ -315,49 +324,9 @@ mod should {
         }
 
         #[test]
-        fn test_wildcard_matches_any_positive_float(s in 0f64..f64::MAX) {
-            let wildcard = Token::Wildcard;
-            let val = Token::Value(TypedToken::Float(s));
-            assert_that(&wildcard).is_equal_to(val.clone());
-            assert_that(&val).is_equal_to(wildcard);
-        }
-
-        #[test]
-        fn test_wildcard_matches_any_negative_float(s in f64::MIN..0f64) {
-            let wildcard = Token::Wildcard;
-            let val = Token::Value(TypedToken::Float(s));
-            assert_that(&wildcard).is_equal_to(val.clone());
-            assert_that(&val).is_equal_to(wildcard);
-        }
-
-        #[test]
         fn test_value_string_matches_same_string(s in "\\PC*") {
             let val1 = Token::Value(TypedToken::String(INTERNER.write().get_or_intern(s.clone())));
             let val2 = Token::Value(TypedToken::String(INTERNER.write().get_or_intern(s)));
-            assert_that(&val1).is_equal_to(val2.clone());
-            assert_that(&val2).is_equal_to(val1);
-        }
-
-        #[test]
-        fn test_value_int_matches_same_int(s in i64::MIN..i64::MAX) {
-            let val1 = Token::Value(TypedToken::Int(s));
-            let val2 = Token::Value(TypedToken::Int(s));
-            assert_that(&val1).is_equal_to(val2.clone());
-            assert_that(&val2).is_equal_to(val1);
-        }
-
-        #[test]
-        fn test_value_float_matches_same_positive_float(s in 0f64..f64::MAX) {
-            let val1 = Token::Value(TypedToken::Float(s));
-            let val2 = Token::Value(TypedToken::Float(s));
-            assert_that(&val1).is_equal_to(val2.clone());
-            assert_that(&val2).is_equal_to(val1);
-        }
-
-        #[test]
-        fn test_value_float_matches_same_negative_float(s in f64::MIN..0f64) {
-            let val1 = Token::Value(TypedToken::Float(s));
-            let val2 = Token::Value(TypedToken::Float(s));
             assert_that(&val1).is_equal_to(val2.clone());
             assert_that(&val2).is_equal_to(val1);
         }

@@ -9,7 +9,7 @@ use lazy_static::lazy_static;
 
 use rksuid::rksuid;
 use string_interner::DefaultSymbol;
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use self::tokens::{Token, TokenStream, TypedToken};
 
@@ -25,12 +25,12 @@ impl Record {
     #[instrument]
     pub fn new(line: String) -> Self {
         Self {
-            inner: TokenStream::from_line(&line),
+            inner: TokenStream::from_unicode_line(&line),
             uid: rksuid::new(None, None),
         }
     }
 
-    #[instrument]
+    // #[instrument]
     pub fn calc_sim_score(&self, candidate: &Record) -> u64 {
         let pairs = self
             .into_iter()
@@ -39,7 +39,14 @@ impl Record {
         // let mut interner = INTERNER.write();
         let score = pairs
             .iter()
-            .filter(|(this, other)| this == other)
+            .filter(|(this, other)| {
+                if this == other {
+                    info!("{}", format!("found match of {} and {}\n", this, other));
+                    true
+                } else {
+                    false
+                }
+            })
             .fold(0_u64, |acc, _pair| acc + 1);
         score
     }
@@ -143,29 +150,90 @@ impl fmt::Display for Record {
 mod should {
     use crate::Record;
     use crate::INTERNER;
+    use joinery::{Joinable, JoinableIterator};
+    use proptest::prelude::*;
+    use proptest::string::string_regex;
     use spectral::prelude::*;
     use tracing_test::traced_test;
 
-    #[traced_test]
-    #[test]
-    fn test_record_new() {
-        let input = "Message send failed to remote host: foo.bar.com".to_string();
-        let rec = Record::new(input.clone());
-        assert_eq!(input, rec.to_string());
+    prop_compose! {
+        fn gen_word()(s in "[[:alpha:]]+") -> String {
+            s
+        }
     }
 
-    #[traced_test]
-    #[test]
-    fn test_record_calc_sim_score() {
-        let input = "Message send failed to remote host: foo.bar.com".to_string();
-        let input2 = "Message send succeeded with flying colors".to_string();
-        let rec = Record::new(input);
-        let other = Record::new(input2);
-        let score = rec.calc_sim_score(&other);
-        assert_eq!(score, 2);
+    fn gen_variable_string() -> impl Strategy<Value = String> {
+        prop_oneof![
+            // UUID
+            string_regex(r"[A-Fa-f0-9]{8}-(?:[A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{12}").unwrap(),
+            // MAC address
+            string_regex(r"(?:(?:[A-Fa-f0-9]{2}:){5}[A-Fa-f0-9]{2})").unwrap(),
+            // IPv6
+            string_regex(r"((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))").unwrap(),
+            // Base 10 Integer
+            string_regex(r"(?:[+-]?(?:[0-9]+))").unwrap(),
+            // Months, too flaky to use yet becasue not enough possible values
+            // string_regex(r"(?:[Jj]an(?:uary|uar)?|[Ff]eb(?:ruary|ruar)?|[Mm](?:a|ä)?r(?:ch|z)?|[Aa]pr(?:il)?|[Mm]a(?:y|i)?|[Jj]un(?:e|i)?|[Jj]ul(?:y)?|[Aa]ug(?:ust)?|[Ss]ep(?:tember)?|[Oo](?:c|k)?t(?:ober)?|[Nn]ov(?:ember)?|[Dd]e(?:c|z)(?:ember)?)").unwrap(),
+        ]
     }
 
-    #[traced_test]
+    fn gen_phrase(len: usize) -> impl Strategy<Value = String> {
+        prop::collection::vec(gen_word(), len)
+            .prop_flat_map(|vec| Just(vec.iter().join_with(" ").to_string()))
+    }
+
+    fn gen_vars(len: usize) -> impl Strategy<Value = String> {
+        prop::collection::vec(gen_variable_string(), len)
+            .prop_flat_map(|vec| Just(vec.iter().join_with(" ").to_string()))
+    }
+
+    fn gen_complex(base: usize, variable: usize) -> impl Strategy<Value = String> {
+        let base = gen_phrase(base);
+        let vars = gen_vars(variable);
+        (base, vars).prop_map(|(b, v)| [b, v].join_with(" ").to_string())
+    }
+
+    prop_compose! {
+        fn gen_matching_lines(base_len: usize, var_count: usize, num_lines: usize)(base_phrase in gen_phrase(base_len), var_set in prop::collection::vec(gen_vars(var_count), num_lines)) -> Vec<String> {
+            var_set.iter().map(|v| {[base_phrase.clone(), v.to_string()].join_with(" ").to_string()}).collect::<Vec<String>>()
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_proptest_base_record_new(phrase in gen_phrase(5)) {
+            let rec = Record::new(phrase.clone());
+            prop_assert_eq!(phrase, rec.to_string());
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_proptest_variable_record_new(line in gen_complex(7, 3)) {
+            // Because we don't try to fully preserve whitespace semantics
+            // instead we test that the stringified form of the record is "stable"
+            let rec = Record::new(line.clone());
+            let rec2 = Record::new(rec.to_string());
+            prop_assert_eq!(rec.to_string(), rec2.to_string());
+
+            // Whitespace internally is preserved, only the end is missing
+            let reconstituted = rec.to_string();
+            prop_assert!(line.contains(&reconstituted));
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_matching_records(lines in gen_matching_lines(7, 3, 3)) {
+            let recs = lines.iter().map(|l| Record::new(l.clone())).collect::<Vec<Record>>();
+            let base = recs[0].clone();
+            let score1 = base.calc_sim_score(&recs[1].clone());
+            let score2 = base.calc_sim_score(&recs[2].clone());
+            assert_eq!(score1, score2);
+            assert_eq!(score1, 7);
+        }
+    }
+
     #[test]
     fn test_record_first() {
         let input = "Message send failed to remote host: foo.bar.com".to_string();
@@ -174,7 +242,6 @@ mod should {
         assert_eq!(INTERNER.read().resolve(val).unwrap(), "Message");
     }
 
-    #[traced_test]
     #[test]
     fn test_record_len() {
         let input = "Message send failed to remote host: foo.bar.com".to_string();
@@ -182,7 +249,6 @@ mod should {
         assert_eq!(rec.len(), 7);
     }
 
-    #[traced_test]
     #[test]
     fn test_consuming_iter() {
         let input = "Message send failed to remote host: foo.bar.com".to_string();
@@ -195,7 +261,6 @@ mod should {
         assert_that(&tokens.iter()).contains_all_of(&words.iter());
     }
 
-    #[traced_test]
     #[test]
     fn test_non_consuming_iter() {
         let input = "Message send failed to remote host: foo.bar.com".to_string();
