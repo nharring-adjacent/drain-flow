@@ -8,7 +8,7 @@ use joinery::JoinableIterator;
 use lazy_static::lazy_static;
 use regex::RegexSet;
 use string_interner::DefaultSymbol;
-use tracing::{debug, info, instrument};
+use tracing::{debug, instrument};
 
 use super::ASTERISK;
 
@@ -183,7 +183,7 @@ impl TokenStream {
                 let token = (
                     Offset {
                         start: start.0,
-                        end: end,
+                        end,
                     },
                     Token::Value(TypedToken::String(interner.get_or_intern(w))),
                 );
@@ -233,16 +233,12 @@ impl fmt::Display for TokenStream {
             .iter()
             .tuple_windows()
             .map(|(first, second)| (first.0.end, second.0.start))
-            .map(|t| " ".repeat(t.1 - t.0).to_string())
+            .map(|t| " ".repeat(t.1 - t.0))
             .collect::<Vec<String>>();
         write!(
             f,
             "{}",
-            words
-                .iter()
-                .interleave(whitespace.iter())
-                .join_concat()
-                .to_string()
+            words.iter().interleave(whitespace.iter()).join_concat()
         )
     }
 }

@@ -154,7 +154,6 @@ mod should {
     use proptest::prelude::*;
     use proptest::string::string_regex;
     use spectral::prelude::*;
-    use tracing_test::traced_test;
 
     prop_compose! {
         fn gen_word()(s in "[[:alpha:]]+") -> String {
