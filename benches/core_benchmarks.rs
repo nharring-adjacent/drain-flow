@@ -1,3 +1,7 @@
+#[macro_use]
+extern crate serde_derive;
+extern crate tinytemplate;
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use drain_flow::log_group::LogGroup;
