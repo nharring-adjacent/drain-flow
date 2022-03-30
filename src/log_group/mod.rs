@@ -129,14 +129,15 @@ mod should {
 
     #[test]
     fn test_update_variables() {
-        let rec1 = Record::new("Common prefix Common prefix Common prefix 1234".to_string());
+        let r1 = Record::new("Common Prefix Common Prefix Common Prefix 6789".to_string());
+        let r2 = Record::new("Common Prefix Common Prefix Common Prefix 827364".to_string());
         let mut lg = LogGroup {
-            event: rec1.clone(),
-            examples: vec![rec1],
+            event: r1.clone(),
+            examples: vec![r1],
             variables: HashMap::new(),
         };
-        let rec2 = Record::new("Common prefix Common prefix Common prefix 3456".to_string());
-        let vars = lg.discover_variables(&rec2).unwrap();
+        
+        let vars = lg.discover_variables(&r2).unwrap();
         lg.updaate_variables(vars);
         assert_that(&lg.variables).contains_key(6);
     }
