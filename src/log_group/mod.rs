@@ -72,7 +72,6 @@ impl LogGroup {
             let (offset, _) = self.event.inner.inner[var.0].clone();
             self.event.inner.inner[var.0] = (offset, var.1);
         }
-        
     }
 
     #[instrument]
