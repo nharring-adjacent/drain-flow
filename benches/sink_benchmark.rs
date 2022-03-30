@@ -1,10 +1,8 @@
-use chrono::{DateTime, Utc};
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use drain_flow::log_group::LogGroup;
-use drain_flow::record::Record;
+use chrono::Utc;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+
 use drain_flow::SimpleDrain;
 use generators::{RecordTemplate, Sendmail};
-use rand::prelude::*;
 
 use rand::Rng;
 
