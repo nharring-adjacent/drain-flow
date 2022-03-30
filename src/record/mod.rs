@@ -18,7 +18,7 @@ lazy_static! {
 }
 #[derive(Clone, Debug)]
 pub struct Record {
-    inner: TokenStream,
+    pub(crate) inner: TokenStream,
     pub uid: rksuid::Ksuid,
 }
 impl Record {

@@ -163,7 +163,7 @@ pub struct Offset {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TokenStream {
-    inner: Vec<(Offset, Token)>,
+    pub(crate) inner: Vec<(Offset, Token)>,
 }
 
 impl TokenStream {

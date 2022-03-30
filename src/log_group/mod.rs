@@ -67,8 +67,12 @@ impl LogGroup {
     fn updaate_variables(&mut self, vars: Vec<(usize, Token)>) {
         for var in vars {
             // Assume we got vars from discover_variab les so it has already checked against this map
-            self.variables.insert(var.0, var.1);
+            self.variables.insert(var.0, var.1.clone());
+            // Update the tokens in the base event as well
+            let (offset, _) = self.event.inner.inner[var.0].clone();
+            self.event.inner.inner[var.0] = (offset, var.1);
         }
+        
     }
 
     #[instrument]
