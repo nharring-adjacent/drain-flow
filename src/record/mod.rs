@@ -9,7 +9,7 @@ use lazy_static::lazy_static;
 
 use rksuid::rksuid;
 use string_interner::DefaultSymbol;
-use tracing::{info, instrument};
+use tracing::{debug, instrument};
 
 use self::tokens::{Token, TokenStream, TypedToken};
 
@@ -41,7 +41,7 @@ impl Record {
             .iter()
             .filter(|(this, other)| {
                 if this == other {
-                    info!("{}", format!("found match of {} and {}\n", this, other));
+                    debug!("{}", format!("found match of {} and {}\n", this, other));
                     true
                 } else {
                     false
