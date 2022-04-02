@@ -85,6 +85,7 @@ impl Grokker {
         RegexSet::new(variants).expect("valid regular expressions compile")
     }
 
+    #[instrument(level="trace")]
     pub fn from_match_index(idx: usize) -> Option<Grokker> {
         if idx > *GROKKER_COUNT {
             return None;
@@ -167,6 +168,7 @@ pub struct TokenStream {
 }
 
 impl TokenStream {
+    #[instrument(skip(line))]
     pub fn from_unicode_line(line: &str) -> Self {
         let mut interner = INTERNER.write();
         let mut progress = 0usize;
@@ -194,7 +196,7 @@ impl TokenStream {
         Self { inner: words }
     }
 
-    #[instrument]
+    #[instrument(skip(self), level="trace")]
     pub fn first(&self) -> Option<Token> {
         match self.inner.len() {
             0 => None,
@@ -202,17 +204,17 @@ impl TokenStream {
         }
     }
 
-    #[instrument]
+    #[instrument(skip(self), level="trace")]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
-    #[instrument]
+    #[instrument(skip(self), level="trace")]
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub fn get_token_at_index(&self, idx: usize) -> Option<Token> {
         match idx < self.inner.len() {
             true => Some(self.inner[idx].1.clone()),
