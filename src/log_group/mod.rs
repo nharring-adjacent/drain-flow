@@ -34,7 +34,7 @@ impl LogGroup {
         }
     }
 
-    #[instrument(skip(self), level="trace")]
+    #[instrument(skip(self), level = "trace")]
     pub fn event(&self) -> &Record {
         &self.event
     }
@@ -74,17 +74,17 @@ impl LogGroup {
         }
     }
 
-    #[instrument(level="trace")]
+    #[instrument(level = "trace")]
     pub fn len(&self) -> usize {
         self.examples.len()
     }
 
-    #[instrument(level="trace")]
+    #[instrument(level = "trace")]
     pub fn is_empty(&self) -> bool {
         self.examples.is_empty()
     }
 
-    #[instrument(level="info")]
+    #[instrument(level = "info")]
     pub fn get_examples(&self) -> Vec<Record> {
         self.examples.clone()
     }
@@ -136,7 +136,7 @@ mod should {
             examples: vec![r1],
             variables: HashMap::new(),
         };
-        
+
         let vars = lg.discover_variables(&r2).unwrap();
         lg.updaate_variables(vars);
         assert_that(&lg.variables).contains_key(6);

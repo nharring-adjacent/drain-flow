@@ -85,7 +85,7 @@ impl Grokker {
         RegexSet::new(variants).expect("valid regular expressions compile")
     }
 
-    #[instrument(level="trace")]
+    #[instrument(level = "trace")]
     pub fn from_match_index(idx: usize) -> Option<Grokker> {
         if idx > *GROKKER_COUNT {
             return None;
@@ -196,7 +196,7 @@ impl TokenStream {
         Self { inner: words }
     }
 
-    #[instrument(skip(self), level="trace")]
+    #[instrument(skip(self), level = "trace")]
     pub fn first(&self) -> Option<Token> {
         match self.inner.len() {
             0 => None,
@@ -204,12 +204,12 @@ impl TokenStream {
         }
     }
 
-    #[instrument(skip(self), level="trace")]
+    #[instrument(skip(self), level = "trace")]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
-    #[instrument(skip(self), level="trace")]
+    #[instrument(skip(self), level = "trace")]
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }

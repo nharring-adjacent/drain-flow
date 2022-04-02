@@ -51,22 +51,22 @@ impl Record {
         score
     }
 
-    #[instrument(level="trace", skip(self))]
+    #[instrument(level = "trace", skip(self))]
     pub fn first(&self) -> Option<DefaultSymbol> {
         self.inner.first().map(|f| f.into())
     }
 
-    #[instrument(skip(self), level="trace")]
+    #[instrument(skip(self), level = "trace")]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
-    #[instrument(skip(self), level="trace")]
+    #[instrument(skip(self), level = "trace")]
     pub fn is_empty(&self) -> bool {
         self.inner.len() == 0
     }
 
-    #[instrument(skip(sym), level="trace")]
+    #[instrument(skip(sym), level = "trace")]
     pub fn resolve(sym: DefaultSymbol) -> Option<String> {
         INTERNER.read().resolve(sym).map(|s| s.to_owned())
     }
