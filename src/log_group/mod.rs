@@ -107,7 +107,6 @@ impl LogGroup {
     pub fn get_id(&self) -> Ksuid {
         self.id
     }
-
 }
 
 impl fmt::Display for LogGroup {
