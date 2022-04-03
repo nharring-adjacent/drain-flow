@@ -16,7 +16,7 @@ pub struct LogGroup {
 pub type Wildcard = (usize, Token);
 
 impl LogGroup {
-    #[instrument]
+    #[instrument(skip(event))]
     pub fn new(event: Record) -> Self {
         Self {
             event,
@@ -25,7 +25,7 @@ impl LogGroup {
         }
     }
 
-    #[instrument]
+    #[instrument(skip(self, rec))]
     pub fn add_example(&mut self, rec: Record) {
         let vars = self.discover_variables(&rec).unwrap();
         self.examples.push(rec);
@@ -34,12 +34,12 @@ impl LogGroup {
         }
     }
 
-    #[instrument]
+    #[instrument(skip(self), level = "trace")]
     pub fn event(&self) -> &Record {
         &self.event
     }
 
-    #[instrument]
+    #[instrument(skip(self, rec))]
     pub fn discover_variables(&self, rec: &Record) -> Result<Vec<Wildcard>, Error> {
         let f = self
             .event
@@ -63,7 +63,7 @@ impl LogGroup {
         Ok(f)
     }
 
-    #[instrument]
+    #[instrument(skip(self, vars))]
     fn updaate_variables(&mut self, vars: Vec<(usize, Token)>) {
         for var in vars {
             // Assume we got vars from discover_variab les so it has already checked against this map
@@ -74,17 +74,17 @@ impl LogGroup {
         }
     }
 
-    #[instrument]
+    #[instrument(level = "trace")]
     pub fn len(&self) -> usize {
         self.examples.len()
     }
 
-    #[instrument]
+    #[instrument(level = "trace")]
     pub fn is_empty(&self) -> bool {
         self.examples.is_empty()
     }
 
-    #[instrument]
+    #[instrument(level = "info")]
     pub fn get_examples(&self) -> Vec<Record> {
         self.examples.clone()
     }
@@ -136,7 +136,7 @@ mod should {
             examples: vec![r1],
             variables: HashMap::new(),
         };
-        
+
         let vars = lg.discover_variables(&r2).unwrap();
         lg.updaate_variables(vars);
         assert_that(&lg.variables).contains_key(6);

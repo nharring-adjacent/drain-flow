@@ -34,7 +34,7 @@ pub struct SimpleDrain {
 }
 
 impl<'a> SimpleDrain {
-    #[instrument]
+    #[instrument(skip(domain))]
     pub fn new(domain: Vec<String>) -> Result<Self, Error> {
         let patterns = domain
             .iter()
@@ -48,7 +48,7 @@ impl<'a> SimpleDrain {
         })
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub fn set_threshold(&mut self, numerator: u64, denominator: u64) -> Result<(), Error> {
         let numer = BigInt::from_u64(numerator)
             .ok_or_else(|| anyhow!("unable to make numerator from {}", numerator))?;
@@ -65,7 +65,7 @@ impl<'a> SimpleDrain {
     /// Ok(true) when a new entry is added
     /// Ok(false) when the line matched an existing entry
     /// Err(e) for errors during processing
-    #[instrument]
+    #[instrument(skip(self, line))]
     pub fn process_line(&mut self, line: String) -> Result<bool, Error> {
         if line.is_empty() {
             return Ok(false);
@@ -122,7 +122,7 @@ impl<'a> SimpleDrain {
         }
     }
 
-    #[instrument]
+    #[instrument(skip(self), level = "trace")]
     pub fn iter_groups(&self) -> Vec<Vec<&LogGroup>> {
         let mut results: Vec<Vec<&LogGroup>> = Vec::new();
         for length in self.base_layer.keys() {
@@ -137,7 +137,7 @@ impl<'a> SimpleDrain {
         results
     }
 
-    #[instrument]
+    #[instrument(skip(self), level = "trace")]
     pub fn resolve(&self, sym: DefaultSymbol) -> String {
         self.strings
             .read()

@@ -22,7 +22,7 @@ pub struct Record {
     pub uid: rksuid::Ksuid,
 }
 impl Record {
-    #[instrument]
+    #[instrument(name = "Create new record", skip(line), level = "trace")]
     pub fn new(line: String) -> Self {
         Self {
             inner: TokenStream::from_unicode_line(&line),
@@ -30,7 +30,7 @@ impl Record {
         }
     }
 
-    // #[instrument]
+    #[instrument(name = "Calculate similarity score", skip(candidate, self))]
     pub fn calc_sim_score(&self, candidate: &Record) -> u64 {
         let pairs = self
             .into_iter()
@@ -51,21 +51,22 @@ impl Record {
         score
     }
 
-    #[instrument]
+    #[instrument(level = "trace", skip(self))]
     pub fn first(&self) -> Option<DefaultSymbol> {
         self.inner.first().map(|f| f.into())
     }
 
-    #[instrument]
+    #[instrument(skip(self), level = "trace")]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
+    #[instrument(skip(self), level = "trace")]
     pub fn is_empty(&self) -> bool {
         self.inner.len() == 0
     }
 
-    #[instrument]
+    #[instrument(skip(sym), level = "trace")]
     pub fn resolve(sym: DefaultSymbol) -> Option<String> {
         INTERNER.read().resolve(sym).map(|s| s.to_owned())
     }
@@ -171,8 +172,6 @@ mod should {
             string_regex(r"((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))").unwrap(),
             // Base 10 Integer
             string_regex(r"(?:[+-]?(?:[0-9]+))").unwrap(),
-            // Months, too flaky to use yet becasue not enough possible values
-            // string_regex(r"(?:[Jj]an(?:uary|uar)?|[Ff]eb(?:ruary|ruar)?|[Mm](?:a|ä)?r(?:ch|z)?|[Aa]pr(?:il)?|[Mm]a(?:y|i)?|[Jj]un(?:e|i)?|[Jj]ul(?:y)?|[Aa]ug(?:ust)?|[Ss]ep(?:tember)?|[Oo](?:c|k)?t(?:ober)?|[Nn]ov(?:ember)?|[Dd]e(?:c|z)(?:ember)?)").unwrap(),
         ]
     }
 
