@@ -7,7 +7,7 @@ use crate::INTERNER;
 
 use lazy_static::lazy_static;
 
-use rksuid::rksuid;
+use rksuid::Ksuid;
 use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 
@@ -19,14 +19,14 @@ lazy_static! {
 #[derive(Clone, Debug)]
 pub struct Record {
     pub(crate) inner: TokenStream,
-    pub uid: rksuid::Ksuid,
+    pub uid: Ksuid,
 }
 impl Record {
     #[instrument(name = "Create new record", skip(line), level = "trace")]
     pub fn new(line: String) -> Self {
         Self {
             inner: TokenStream::from_unicode_line(&line),
-            uid: rksuid::new(None, None),
+            uid: Ksuid::new(),
         }
     }
 

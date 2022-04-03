@@ -1,7 +1,8 @@
 use std::{borrow::Borrow, collections::HashMap, fmt};
 
 use anyhow::Error;
-use rksuid::rksuid::Ksuid;
+use chrono::{DateTime, Utc};
+use rksuid::Ksuid;
 use tracing::{info, instrument};
 
 use crate::record::{tokens::Token, Record};
@@ -85,27 +86,32 @@ impl LogGroup {
         }
     }
 
-    /// Return the number of examples this [LogGroup] contains
+    /// Number of examples this [LogGroup] contains
     #[instrument(level = "trace")]
     pub fn len(&self) -> usize {
         self.examples.len()
     }
 
-    /// Determined by whether any examples exist for a [LogGroup]
+    /// Whether any examples exist for a [LogGroup]
     #[instrument(level = "trace")]
     pub fn is_empty(&self) -> bool {
         self.examples.is_empty()
     }
 
-    /// Return a vector of shared references to the example records for this group
+    /// Return a Vec<&Record> of the example records for this group
     #[instrument(level = "info")]
     pub fn get_examples(&self) -> Vec<&Record> {
         self.examples.iter().collect::<Vec<&Record>>()
     }
 
-    /// Returns the Ksuid associated with the log group, usually identical to the Record which created the group
+    /// Returns the [Ksuid] associated with the [LogGroup], usually identical to the [Record] which created the group
     pub fn get_id(&self) -> Ksuid {
         self.id
+    }
+
+    /// Returns the [DateTime] of the creation of the base event in the [LogGroup]
+    pub fn get_time(&self) -> DateTime<Utc> {
+        self.event.uid.get_time()
     }
 }
 
