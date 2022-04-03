@@ -1,24 +1,34 @@
 use std::{borrow::Borrow, collections::HashMap, fmt};
 
 use anyhow::Error;
+use rksuid::rksuid::Ksuid;
 use tracing::{info, instrument};
 
 use crate::record::{tokens::Token, Record};
 
 #[derive(Clone, Debug)]
 pub struct LogGroup {
+    pub id: Ksuid,
     event: Record,
     examples: Vec<Record>,
     pub variables: HashMap<usize, Token>,
 }
 
-/// A wildcard is an offset and a token
-pub type Wildcard = (usize, Token);
+/// A wildcard is an offset and a typed token
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Wildcard((usize, Token));
+
+impl fmt::Display for Wildcard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0 .0)
+    }
+}
 
 impl LogGroup {
     #[instrument(skip(event))]
     pub fn new(event: Record) -> Self {
         Self {
+            id: event.uid,
             event,
             examples: vec![],
             variables: HashMap::new(),
@@ -39,6 +49,7 @@ impl LogGroup {
         &self.event
     }
 
+    /// Compare a record with this log group and identify positions which qualify as variables, returned as vector of [Wildcard]
     #[instrument(skip(self, rec))]
     pub fn discover_variables(&self, rec: &Record) -> Result<Vec<Wildcard>, Error> {
         let f = self
@@ -58,35 +69,43 @@ impl LogGroup {
                     false
                 }
             })
-            .map(|((idx, _event), _candidate)| (idx, Token::Wildcard))
+            .map(|((idx, _event), _candidate)| Wildcard((idx, Token::Wildcard)))
             .collect::<Vec<_>>();
         Ok(f)
     }
 
     #[instrument(skip(self, vars))]
-    fn updaate_variables(&mut self, vars: Vec<(usize, Token)>) {
+    fn updaate_variables(&mut self, vars: Vec<Wildcard>) {
         for var in vars {
             // Assume we got vars from discover_variab les so it has already checked against this map
-            self.variables.insert(var.0, var.1.clone());
+            self.variables.insert(var.0 .0, var.0 .1.clone());
             // Update the tokens in the base event as well
-            let (offset, _) = self.event.inner.inner[var.0].clone();
-            self.event.inner.inner[var.0] = (offset, var.1);
+            let (offset, _) = self.event.inner.inner[var.0 .0].clone();
+            self.event.inner.inner[var.0 .0] = (offset, var.0 .1);
         }
     }
 
+    /// Return the number of examples this [LogGroup] contains
     #[instrument(level = "trace")]
     pub fn len(&self) -> usize {
         self.examples.len()
     }
 
+    /// Determined by whether any examples exist for a [LogGroup]
     #[instrument(level = "trace")]
     pub fn is_empty(&self) -> bool {
         self.examples.is_empty()
     }
 
+    /// Return a vector of shared references to the example records for this group
     #[instrument(level = "info")]
-    pub fn get_examples(&self) -> Vec<Record> {
-        self.examples.clone()
+    pub fn get_examples(&self) -> Vec<&Record> {
+        self.examples.iter().collect::<Vec<&Record>>()
+    }
+
+    /// Returns the Ksuid associated with the log group, usually identical to the Record which created the group
+    pub fn get_id(&self) -> Ksuid {
+        self.id
     }
 }
 
@@ -112,39 +131,26 @@ mod should {
     };
 
     use spectral::prelude::*;
-    use std::collections::HashMap;
+
+    use super::Wildcard;
 
     #[test]
     fn test_discover_variables() {
         let rec1 = Record::new("Common prefix Common prefix Common prefix 1234".to_string());
-        let lg = LogGroup {
-            event: rec1.clone(),
-            examples: vec![rec1],
-            variables: HashMap::new(),
-        };
+        let lg = LogGroup::new(rec1);
         let rec2 = Record::new("Common prefix Common prefix Common prefix 3456".to_string());
         let vars = lg.discover_variables(&rec2);
-        assert_that(&vars).is_ok_containing(vec![(6, Token::Wildcard)]);
+        assert_that(&vars).is_ok_containing(vec![Wildcard((6, Token::Wildcard))]);
     }
 
     #[test]
     fn test_update_variables() {
         let r1 = Record::new("Common Prefix Common Prefix Common Prefix 6789".to_string());
         let r2 = Record::new("Common Prefix Common Prefix Common Prefix 827364".to_string());
-        let mut lg = LogGroup {
-            event: r1.clone(),
-            examples: vec![r1],
-            variables: HashMap::new(),
-        };
+        let mut lg = LogGroup::new(r1);
 
         let vars = lg.discover_variables(&r2).unwrap();
         lg.updaate_variables(vars);
         assert_that(&lg.variables).contains_key(6);
     }
-
-    // prop_compose! {
-    //     fn generate_line_pair(words: usize, variables: usize) -> (String, String) {
-
-    //     }
-    // }
 }
