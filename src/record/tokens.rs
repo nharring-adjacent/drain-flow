@@ -104,6 +104,22 @@ pub enum Token {
     Value(TypedToken),
 }
 
+impl Token {
+    pub fn from_parse(input: &str) -> Token {
+        let matches = MATCHERS.matches(input);
+        let tok = match matches.len() {
+            0 => Token::Value(TypedToken::from_parse(input).unwrap()),
+            1 => {
+                let idx = matches.iter().collect::<Vec<usize>>()[0];
+                Token::TypedMatch(Grokker::from_match_index(idx).unwrap())
+            }
+            // Todo: Explore if there is a way to figure out a "best match"
+            _ => Token::Wildcard,
+        };
+        tok
+    }
+}
+
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let out: String = match self {
@@ -151,8 +167,8 @@ pub enum TypedToken {
 
 impl TypedToken {
     pub fn from_parse(input: &str) -> Result<TypedToken, Error> {
-        let tok = INTERNER.write().get_or_intern(input);
-        Ok(TypedToken::String(tok))
+        let sym = INTERNER.write().get_or_intern(input);
+        Ok(TypedToken::String(sym))
     }
 }
 
