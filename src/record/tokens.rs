@@ -2,7 +2,6 @@ use std::{collections::HashMap, fmt};
 
 use crate::INTERNER;
 use anyhow::Error;
-use float_eq::float_eq;
 use itertools::Itertools;
 use joinery::JoinableIterator;
 use lazy_static::lazy_static;
@@ -16,6 +15,8 @@ lazy_static! {
     static ref MATCHERS: RegexSet = Grokker::build_pattern_set();
     static ref GROKKER_COUNT: usize = Grokker::iter_variants().count() - 1;
     static ref GROKKER_SYMS: HashMap<Grokker, DefaultSymbol> = symbolize_grokker();
+    static ref GROKKER_VARIANTS: HashMap<usize, Grokker> =
+        HashMap::from_iter(Grokker::iter_variants().enumerate());
 }
 
 fn symbolize_grokker() -> HashMap<Grokker, DefaultSymbol> {
@@ -31,8 +32,6 @@ custom_derive! {
         Base10Float,
         Base16Integer,
         Base16Float,
-        QuotedString,
-        Word,
         UUID,
         MAC,
         IPv6,
@@ -46,34 +45,30 @@ custom_derive! {
 impl Grokker {
     pub fn to_pattern(self) -> String {
         match self {
-            Grokker::Base10Integer => r"(?:[+-]?(?:[0-9]+))".to_string(),
+            Grokker::Base10Integer => r"^(?:[+-]?(?:[0-9]+))$".to_string(),
             Grokker::Base10Float => {
-                r"(?<![0-9.+-])(?>[+-]?(?:(?:[0-9]+(?:\.[0-9]+)?)|(?:\.[0-9]+)))".to_string()
+                r"^(?:[+-]?(?:(?:[0-9]+(?:\.[0-9]+))|(?:\.[0-9]+)))$".to_string()
             }
-            Grokker::Base16Integer => r"(?<![0-9A-Fa-f])(?:[+-]?(?:0x)?(?:[0-9A-Fa-f]+))".to_string(),
+            Grokker::Base16Integer => r"^(?:[+-]?(?:0x)?(?:[0-9A-Fa-f]+))$".to_string(),
             Grokker::Base16Float => {
-                r"\b(?<![0-9A-Fa-f.])(?:[+-]?(?:0x)?(?:(?:[0-9A-Fa-f]+(?:\.[0-9A-Fa-f]*)?)|(?:\.[0-9A-Fa-f]+)))\b".to_string()
+                r"^(?:[+-]?(?:0x)?(?:[0-9A-Fa-f]+)(?:\.[0-9A-Fa-f]+))$".to_string()
             }
-            Grokker::QuotedString => {
-                r#"(?>(?<!\\)(?>"(?>\\.|[^\\"]+)+"|""|(?>'(?>\\.|[^\\']+)+')|''|(?>`(?>\\.|[^\\`]+)+`)|``))"#.to_string()
-            }
-            Grokker::Word => r"\b\w+\b".to_string(),
-            Grokker::UUID => r"[A-Fa-f0-9]{8}-(?:[A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{12}".to_string(),
-            Grokker::MAC => r"(?:(?:[A-Fa-f0-9]{2}:){5}[A-Fa-f0-9]{2})".to_string(),
+            Grokker::UUID => r"^[A-Fa-f0-9]{8}-(?:[A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{12}$".to_string(),
+            Grokker::MAC => r"^(?:(?:[A-Fa-f0-9]{2}:){5}[A-Fa-f0-9]{2})$".to_string(),
             Grokker::IPv6 => {
-                r"((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?".to_string()
+                r"^((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?$".to_string()
             }
             Grokker::IPv4 => {
-                r"(?<![0-9])(?:(?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])[.](?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])[.](?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])[.](?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5]))(?![0-9])".to_string()
+                r"^(?:(?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])[.](?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])[.](?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])[.](?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5]))$".to_string()
             }
             Grokker::Hostname => {
-                r"\b(?:[0-9A-Za-z][0-9A-Za-z-]{0,62})(?:\.(?:[0-9A-Za-z][0-9A-Za-z-]{0,62}))*(\.?|\b)".to_string()
+                r"^(?:[0-9A-Za-z][0-9A-Za-z-]{0,62})(?:\.(?:[0-9A-Za-z][0-9A-Za-z-]{0,62}))*(\.?|\b)$".to_string()
             }
             Grokker::Month => {
-                r"\b(?:[Jj]an(?:uary|uar)?|[Ff]eb(?:ruary|ruar)?|[Mm](?:a|ä)?r(?:ch|z)?|[Aa]pr(?:il)?|[Mm]a(?:y|i)?|[Jj]un(?:e|i)?|[Jj]ul(?:y)?|[Aa]ug(?:ust)?|[Ss]ep(?:tember)?|[Oo](?:c|k)?t(?:ober)?|[Nn]ov(?:ember)?|[Dd]e(?:c|z)(?:ember)?)\b".to_string()
+                r"^(?:[Jj]an(?:uary|uar)?|[Ff]eb(?:ruary|ruar)?|[Mm](?:a|ä)?r(?:ch|z)?|[Aa]pr(?:il)?|[Mm]a(?:y|i)?|[Jj]un(?:e|i)?|[Jj]ul(?:y)?|[Aa]ug(?:ust)?|[Ss]ep(?:tember)?|[Oo](?:c|k)?t(?:ober)?|[Nn]ov(?:ember)?|[Dd]e(?:c|z)(?:ember)?)$".to_string()
             }
             Grokker::Day => {
-                r"(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)".to_string()
+                r"^(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)$".to_string()
             }
         }
     }
@@ -90,11 +85,44 @@ impl Grokker {
         if idx > *GROKKER_COUNT {
             return None;
         }
-        Some(Grokker::iter_variants().collect::<Vec<Grokker>>()[idx])
+        Some(GROKKER_VARIANTS[&idx])
     }
 }
 
 #[derive(Debug, Clone)]
+pub struct GrokSet {
+    match_types: Vec<Grokker>,
+}
+
+/// GrokSet is a convenience wrapper over Regex::SetMatches and Grokker variants
+impl GrokSet {
+    pub fn new(value: &str) -> Self {
+        let matches = MATCHERS.matches(value);
+        let match_types: Vec<_> = matches
+            .iter()
+            .filter_map(Grokker::from_match_index)
+            .collect();
+        Self { match_types }
+    }
+    pub fn is_numeric(&self) -> bool {
+        self.match_types.iter().any(|i| {
+            matches!(
+                i,
+                Grokker::Base10Integer
+                    | Grokker::Base16Integer
+                    | Grokker::Base16Float
+                    | Grokker::Base10Float
+            )
+        })
+    }
+    pub fn is_integer(&self) -> bool {
+        self.match_types
+            .iter()
+            .any(|i| matches!(i, Grokker::Base10Integer | Grokker::Base16Integer))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     /// Token that matches any other token
     Wildcard,
@@ -105,13 +133,76 @@ pub enum Token {
 }
 
 impl Token {
+    #[instrument]
     pub fn from_parse(input: &str) -> Token {
         let matches = MATCHERS.matches(input);
-        let tok = match matches.len() {
+        let match_types: Vec<_> = matches
+            .iter()
+            .filter_map(Grokker::from_match_index)
+            .collect();
+
+        debug!(?match_types, "match types, len: {}", matches.len());
+        let tok = match match_types.len() {
             0 => Token::Value(TypedToken::from_parse(input).unwrap()),
             1 => {
                 let idx = matches.iter().collect::<Vec<usize>>()[0];
                 Token::TypedMatch(Grokker::from_match_index(idx).unwrap())
+            }
+            2 => {
+                debug!("2 match arm");
+                // UUID and hostname can overlap, if they do its 99.999% a UUID
+                if match_types.contains(&Grokker::UUID) && match_types.contains(&Grokker::Hostname)
+                {
+                    debug!("found uuid & hostname");
+                    return Token::TypedMatch(Grokker::UUID);
+                }
+                // All base10 ints match base16 ints
+                if match_types.contains(&Grokker::Base10Integer)
+                    && match_types.contains(&Grokker::Base16Integer)
+                {
+                    return Token::TypedMatch(Grokker::Base10Integer);
+                }
+                // All base10 floats match base16 floats
+                if match_types.contains(&Grokker::Base10Float)
+                    && match_types.contains(&Grokker::Base16Float)
+                {
+                    debug!("found base10 and base16 float");
+                    return Token::TypedMatch(Grokker::Base10Float);
+                }
+                // base16 numbers and hostname can overlap, if they do its 99.999% a number
+                if match_types.contains(&Grokker::Base16Integer)
+                    && match_types.contains(&Grokker::Hostname)
+                {
+                    debug!("found base16 and hostname");
+                    return Token::TypedMatch(Grokker::Base16Integer);
+                }
+                if match_types.contains(&Grokker::Base16Float)
+                    && match_types.contains(&Grokker::Hostname)
+                {
+                    debug!("found base16 and hostname");
+                    return Token::TypedMatch(Grokker::Base16Float);
+                }
+                Token::Wildcard
+            }
+            3 => {
+                debug!("3 match arm");
+                // All base10 integers also match as base16 and weirdly as hostnames
+                if match_types.contains(&Grokker::Base10Integer)
+                    && match_types.contains(&Grokker::Base16Integer)
+                    && match_types.contains(&Grokker::Hostname)
+                {
+                    debug!("found base10 int trying to hide as a hostname");
+                    return Token::TypedMatch(Grokker::Base10Integer);
+                }
+
+                if match_types.contains(&Grokker::Base10Float)
+                    && match_types.contains(&Grokker::Base16Float)
+                    && match_types.contains(&Grokker::Hostname)
+                {
+                    debug!("found base 10 float trying to hide as a hostname");
+                    return Token::TypedMatch(Grokker::Base10Float);
+                }
+                Token::Wildcard
             }
             // Todo: Explore if there is a way to figure out a "best match"
             _ => Token::Wildcard,
@@ -178,7 +269,7 @@ pub struct Offset {
     end: usize,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TokenStream {
     pub(crate) inner: Vec<(Offset, Token)>,
 }
@@ -260,89 +351,150 @@ impl fmt::Display for TokenStream {
         )
     }
 }
-
-impl PartialEq for Token {
-    fn eq(&self, other: &Self) -> bool {
-        match self {
-            Token::Wildcard => true,
-            Token::TypedMatch(tm) => match other {
-                Token::Wildcard => true,
-                Token::TypedMatch(otm) => tm == otm,
-                Token::Value(_) => false,
-            },
-            Token::Value(val) => match other {
-                Token::Wildcard => true,
-                Token::TypedMatch(_) => match val {
-                    TypedToken::String(_) => false,
-                    TypedToken::Int(_) => false,
-                    TypedToken::Float(_) => false,
-                },
-                Token::Value(other_val) => match val {
-                    TypedToken::String(string_val) => {
-                        if let TypedToken::String(other_string) = other_val {
-                            return string_val == other_string;
-                        }
-                        false
-                    }
-                    TypedToken::Int(int_val) => {
-                        if let TypedToken::Int(other_int) = other_val {
-                            return int_val == other_int;
-                        }
-                        false
-                    }
-                    TypedToken::Float(float_val) => {
-                        if let TypedToken::Float(other_float) = other_val {
-                            return float_eq!(float_val, other_float, ulps <= 1);
-                        }
-                        false
-                    }
-                },
-            },
-        }
-    }
-}
-
-impl Eq for Token {}
-
 #[cfg(test)]
 mod should {
-    use crate::record::tokens::{Token, TypedToken};
-    use crate::INTERNER;
-
+    use crate::record::tokens::{GrokSet, Grokker, Token};
     use proptest::prelude::*;
-    use spectral::prelude::*;
 
-    #[test]
-    fn test_wildcard_lhs() {
-        let lhs = Token::Wildcard;
-        let rhs = Token::Value(TypedToken::String(INTERNER.write().get_or_intern("foo")));
-        assert_that(&lhs).is_equal_to(rhs.clone());
-        assert_that(&rhs).is_equal_to(lhs);
+    // The below makes debugging tests much easier
+    // use tracing_test::traced_test;
+
+    prop_compose! {
+        fn gen_uuid()(s in "[A-Fa-f0-9]{8}-(?:[A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{12}") -> String {
+            s
+        }
+    }
+    prop_compose! {
+        fn gen_mac()(s in "(?:(?:[A-Fa-f0-9]{2}:){5}[A-Fa-f0-9]{2})") -> String {
+            s
+        }
+    }
+    prop_compose! {
+        fn gen_int10()(s in "(?:[+-]?(?:[1-9]{2,3})(?:[0-9]{2,}))") -> String {
+            s
+        }
+    }
+    prop_compose! {
+        fn gen_int16()(s in "(?:[+-]?(?:0x)(?:[0-9A-Fa-f]+))") -> String {
+            s
+        }
+    }
+    prop_compose! {
+        fn gen_float10()(s in r"(?:[+-]?(?:(?:[0-9]+(?:\.[0-9]+))|(?:\.[0-9]+)))") -> String {
+            s
+        }
+    }
+    prop_compose! {
+        fn gen_float16()(s in r"(?:[+-]?(?:0x)(?:[0-9A-Fa-f]+)(?:\.[0-9A-Fa-f]+))") -> String {
+            s
+        }
     }
 
     proptest! {
         #[test]
-        fn test_wildcard_matches_any_string(s in "\\PC*") {
-            let wildcard = Token::Wildcard;
-            let val = Token::Value(TypedToken::String(INTERNER.write().get_or_intern(s)));
-            assert_that(&wildcard).is_equal_to(val.clone());
-            assert_that(&val).is_equal_to(wildcard);
+        fn test_token_from_parse_uuid(u in gen_uuid()) {
+            let token = Token::from_parse(&u);
+            prop_assert!({
+                match token {
+                    Token::Wildcard=>false,
+                    Token::TypedMatch(Grokker::UUID)=>true,
+                    Token::TypedMatch(_) => false,
+                    Token::Value(_) => false,
+                }
+            }, "Token should be a uuid");
         }
 
         #[test]
-        fn test_wildcard_matches_any_int(s in i64::MIN..i64::MAX) {
-            let wildcard = Token::Wildcard;
-            let val = Token::Value(TypedToken::Int(s));
-            assert_that(&wildcard).is_equal_to(val.clone());
-            assert_that(&val).is_equal_to(wildcard);
+        fn test_token_from_parse_mac(u in gen_mac()) {
+            let token = Token::from_parse(&u);
+            prop_assert!({
+                match token {
+                    Token::Wildcard=>false,
+                    Token::TypedMatch(Grokker::MAC)=>true,
+                    Token::TypedMatch(_) => false,
+                    Token::Value(_) => false,
+                }
+            }, "Token should be a MAC address");
         }
 
         #[test]
-        fn test_value_string_matches_same_string(s in "\\PC*") {
-            let val1 = Token::Value(TypedToken::String(INTERNER.write().get_or_intern(s.clone())));
-            let val2 = Token::Value(TypedToken::String(INTERNER.write().get_or_intern(s)));
-            assert_that(&val1).is_equal_to(val2.clone());
-            assert_that(&val2).is_equal_to(val1);
+        fn test_token_from_parse_int10(u in gen_int10()) {
+            let token = Token::from_parse(&u);
+            prop_assert!({
+                match token {
+                    Token::Wildcard=>false,
+                    Token::TypedMatch(Grokker::Base10Integer)=>true,
+                    Token::TypedMatch(_) => false,
+                    Token::Value(_) => false,
+                }
+            }, "Token should be a base 10 integer");
+        }
+
+        #[test]
+        fn test_token_from_parse_int16(u in gen_int16()) {
+            let token = Token::from_parse(&u);
+            prop_assert!({
+                match token {
+                    Token::Wildcard=>false,
+                    Token::TypedMatch(Grokker::Base16Integer)=>true,
+                    Token::TypedMatch(_) => false,
+                    Token::Value(_) => false,
+                }
+            }, "Token should be a base 16 integer");
+        }
+
+        #[test]
+        fn test_token_from_parse_float16(u in gen_float16()) {
+            let token = Token::from_parse(&u);
+            prop_assert!({
+                match token {
+                    Token::Wildcard=>false,
+                    Token::TypedMatch(Grokker::Base16Float)=>true,
+                    Token::TypedMatch(_) => false,
+                    Token::Value(_) => false,
+                }
+            }, "Token should be a base 16 float");
+        }
+
+        #[test]
+        fn test_token_from_parse_float10(u in gen_float10()) {
+            let token = Token::from_parse(&u);
+            prop_assert!({
+                match token {
+                    Token::Wildcard=>false,
+                    Token::TypedMatch(Grokker::Base10Float)=>true,
+                    Token::TypedMatch(_) => false,
+                    Token::Value(_) => false,
+                }
+            }, "Token should be a base 10 float");
+        }
+
+        #[test]
+        fn test_grokset_isnumeric_float10(u in gen_float10()) {
+            let line = format!("{}", u);
+            let grokset = GrokSet::new(&line);
+            prop_assert!(grokset.is_numeric(), "GrokSet should indicate is_numeric");
+        }
+
+        #[test]
+        fn test_grokset_isnumeric_in10(u in gen_int10()) {
+            let line = format!("{}", u);
+            let grokset = GrokSet::new(&line);
+            prop_assert!(grokset.is_numeric(), "GrokSet should indicate is_numeric");
+        }
+
+        #[test]
+        fn test_grokset_isnumeric_float16(u in gen_float16()) {
+            let line = format!("{}", u);
+            let grokset = GrokSet::new(&line);
+            prop_assert!(grokset.is_numeric(), "GrokSet should indicate is_numeric");
+        }
+
+        #[test]
+        fn test_grokset_isnumeric_int16(u in gen_int16()) {
+            let line = format!("{}", u);
+            let grokset = GrokSet::new(&line);
+            prop_assert!(grokset.is_numeric(), "GrokSet should indicate is_numeric");
         }
     }
 }

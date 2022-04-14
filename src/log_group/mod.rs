@@ -1,7 +1,6 @@
 use std::{borrow::Borrow, collections::HashMap, fmt};
 
 use anyhow::Error;
-use chrono::{DateTime, Utc};
 use rksuid::Ksuid;
 use tracing::{info, instrument};
 
@@ -16,7 +15,7 @@ pub struct LogGroup {
 }
 
 /// A wildcard is an offset and a typed token
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Wildcard((usize, Token));
 
 impl fmt::Display for Wildcard {
