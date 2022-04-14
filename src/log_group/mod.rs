@@ -16,7 +16,7 @@ pub struct LogGroup {
 }
 
 /// A wildcard is an offset and a typed token
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Wildcard((usize, Token));
 
 impl fmt::Display for Wildcard {

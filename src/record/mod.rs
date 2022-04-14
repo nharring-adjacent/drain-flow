@@ -36,7 +36,6 @@ impl Record {
             .into_iter()
             .zip(candidate.into_iter())
             .collect::<Vec<(_, _)>>();
-        // let mut interner = INTERNER.write();
         let score = pairs
             .iter()
             .filter(|(this, other)| {
