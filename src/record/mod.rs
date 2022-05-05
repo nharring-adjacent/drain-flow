@@ -32,7 +32,7 @@ pub struct Record {
     pub uid: Ksuid,
 }
 impl Record {
-    #[instrument(name = "Create new record", skip(line), level = "trace")]
+    #[instrument(name = "Create new record", level = "trace", skip(line))]
     pub fn new(line: String) -> Self {
         Self {
             inner: TokenStream::from_unicode_line(&line),
@@ -40,7 +40,11 @@ impl Record {
         }
     }
 
-    #[instrument(name = "Calculate similarity score", skip(candidate, self))]
+    #[instrument(
+        name = "Calculate similarity score",
+        level = "trace",
+        skip(candidate, self)
+    )]
     pub fn calc_sim_score(&self, candidate: &Record) -> u64 {
         let pairs = self
             .into_iter()
@@ -65,17 +69,17 @@ impl Record {
         self.inner.first().map(|f| f.into())
     }
 
-    #[instrument(skip(self), level = "trace")]
+    #[instrument(level = "trace", skip(self))]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
-    #[instrument(skip(self), level = "trace")]
+    #[instrument(level = "trace", skip(self))]
     pub fn is_empty(&self) -> bool {
         self.inner.len() == 0
     }
 
-    #[instrument(skip(sym), level = "trace")]
+    #[instrument(level = "trace")]
     pub fn resolve(sym: DefaultSymbol) -> Option<String> {
         INTERNER.read().resolve(sym).map(|s| s.to_owned())
     }
@@ -111,7 +115,7 @@ impl Iterator for RecordIntoIter {
                     TypedToken::Float(f) => f.to_string(),
                 },
             },
-            None => todo!(),
+            None => unreachable!(),
         };
 
         self.index += 1;
