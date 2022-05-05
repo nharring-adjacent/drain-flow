@@ -26,7 +26,7 @@ impl fmt::Display for Wildcard {
 }
 
 impl LogGroup {
-    #[instrument(skip(event))]
+    #[instrument(level = "trace", skip(event))]
     pub fn new(event: Record) -> Self {
         Self {
             id: event.uid,
@@ -36,7 +36,7 @@ impl LogGroup {
         }
     }
 
-    #[instrument(skip(self, rec))]
+    #[instrument(level = "trace", skip(self, rec))]
     pub fn add_example(&mut self, rec: Record) {
         let vars = self.discover_variables(&rec).unwrap();
         self.examples.push(rec);
@@ -45,13 +45,13 @@ impl LogGroup {
         }
     }
 
-    #[instrument(skip(self), level = "trace")]
+    #[instrument(level = "trace", skip(self))]
     pub fn event(&self) -> &Record {
         &self.event
     }
 
     /// Compare a record with this log group and identify positions which qualify as variables, returned as vector of [Wildcard]
-    #[instrument(skip(self, rec))]
+    #[instrument(level = "trace", skip(self, rec))]
     pub fn discover_variables(&self, rec: &Record) -> Result<Vec<Wildcard>, Error> {
         let f = self
             .event
@@ -75,7 +75,7 @@ impl LogGroup {
         Ok(f)
     }
 
-    #[instrument(skip(self, vars))]
+    #[instrument(level = "trace", skip(self, vars))]
     fn updaate_variables(&mut self, vars: Vec<Wildcard>) {
         for var in vars {
             // Assume we got vars from discover_variab les so it has already checked against this map
@@ -87,29 +87,31 @@ impl LogGroup {
     }
 
     /// Number of examples this [LogGroup] contains
-    #[instrument(level = "trace")]
+    #[instrument(level = "trace", skip_all)]
     pub fn len(&self) -> usize {
         self.examples.len()
     }
 
     /// Whether any examples exist for a [LogGroup]
-    #[instrument(level = "trace")]
+    #[instrument(level = "trace", skip_all)]
     pub fn is_empty(&self) -> bool {
         self.examples.is_empty()
     }
 
     /// Return a Vec<&Record> of the example records for this group
-    #[instrument(level = "info")]
+    #[instrument(level = "trace", skip_all)]
     pub fn get_examples(&self) -> Vec<&Record> {
         self.examples.iter().collect::<Vec<&Record>>()
     }
 
     /// Returns the [Ksuid] associated with the [LogGroup], usually identical to the [Record] which created the group
+    #[instrument(level = "trace", skip_all)]
     pub fn get_id(&self) -> Ksuid {
         self.id
     }
 
     /// Returns the [DateTime] of the creation of the base event in the [LogGroup]
+    #[instrument(level = "trace", skip_all)]
     pub fn get_time(&self) -> DateTime<Utc> {
         self.event.uid.get_time()
     }
