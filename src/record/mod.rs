@@ -30,7 +30,11 @@ impl Record {
         }
     }
 
-    #[instrument(name = "Calculate similarity score", level = "trace", skip(candidate, self))]
+    #[instrument(
+        name = "Calculate similarity score",
+        level = "trace",
+        skip(candidate, self)
+    )]
     pub fn calc_sim_score(&self, candidate: &Record) -> u64 {
         let pairs = self
             .into_iter()
