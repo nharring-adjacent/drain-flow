@@ -64,7 +64,7 @@ impl Record {
 
     #[instrument(level = "trace", skip(self))]
     pub fn first(&self) -> Option<DefaultSymbol> {
-        self.inner.first().map(|f| f.into())
+        self.inner.first().map(std::convert::Into::into)
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -79,21 +79,21 @@ impl Record {
 
     #[instrument(level = "trace")]
     pub fn resolve(sym: DefaultSymbol) -> Option<String> {
-        INTERNER.read().resolve(sym).map(|s| s.to_owned())
+        INTERNER.read().resolve(sym).map(std::borrow::ToOwned::to_owned)
     }
 }
 
-pub struct RecordIntoIter {
+pub struct IntoIter {
     record: Record,
     index: usize,
 }
 
-pub struct RecordRefIterator<'a> {
+pub struct RefIterator<'a> {
     record: &'a Record,
     index: usize,
 }
 
-impl Iterator for RecordIntoIter {
+impl Iterator for IntoIter {
     type Item = String;
 
     fn next(&mut self) -> Option<String> {
@@ -129,17 +129,17 @@ impl Iterator for RecordIntoIter {
 }
 
 impl IntoIterator for Record {
-    type IntoIter = RecordIntoIter;
+    type IntoIter = IntoIter;
     type Item = String;
 
     fn into_iter(self) -> Self::IntoIter {
-        RecordIntoIter {
+        IntoIter {
             record: self,
             index: 0,
         }
     }
 }
-impl<'a> Iterator for RecordRefIterator<'a> {
+impl<'a> Iterator for RefIterator<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Token> {
@@ -151,11 +151,11 @@ impl<'a> Iterator for RecordRefIterator<'a> {
     }
 }
 impl<'a> IntoIterator for &'a Record {
-    type IntoIter = RecordRefIterator<'a>;
+    type IntoIter = RefIterator<'a>;
     type Item = Token;
 
     fn into_iter(self) -> Self::IntoIter {
-        RecordRefIterator {
+        RefIterator {
             record: self,
             index: 0,
         }
@@ -173,7 +173,7 @@ mod should {
     use proptest::{prelude::*, string::string_regex};
     use spectral::prelude::*;
 
-    use crate::{record::Record, drains::simple::INTERNER};
+    use crate::{drains::simple::INTERNER, record::Record};
 
     prop_compose! {
         fn gen_word()(s in "[[:alpha:]]+") -> String {

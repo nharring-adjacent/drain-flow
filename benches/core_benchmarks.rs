@@ -12,13 +12,13 @@ extern crate serde_derive;
 extern crate tinytemplate;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use drain_flow::{log_group::LogGroup, record::Record, drains::simple::SimpleDrain};
+use drain_flow::{drains::simple::SingleLayer, log_group::LogGroup, record::Record};
 
 // Really simplistic benchmark of adding new lines using a constant line
 // this is pretty unrealistic since after the first one the string interner
 // will be doing almost no work but its a start
 pub fn benchmark_new_lines(c: &mut Criterion) {
-    let mut drain = SimpleDrain::new(vec![]).unwrap();
+    let mut drain = SingleLayer::new(vec![]).unwrap();
     c.bench_function("new_lines", |b| {
         b.iter(|| {
             drain.process_line(black_box(

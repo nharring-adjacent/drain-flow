@@ -26,7 +26,7 @@ lazy_static! {
         Arc::new(RwLock::new(StringInterner::default()));
 }
 #[derive(Debug, Clone)]
-pub struct SimpleDrain {
+pub struct SingleLayer {
     pub domain: Vec<Regex>,
     // NumTokens -> First Token -> List of Log groups
     base_layer: HashMap<usize, HashMap<DefaultSymbol, Vec<LogGroup>>>,
@@ -34,7 +34,7 @@ pub struct SimpleDrain {
     strings: Arc<RwLock<StringInterner>>,
 }
 
-impl<'a> SimpleDrain {
+impl<'a> SingleLayer {
     #[instrument(skip(domain))]
     pub fn new(domain: Vec<String>) -> Result<Self, Error> {
         let patterns = domain
@@ -74,52 +74,46 @@ impl<'a> SimpleDrain {
         let new_record = Record::new(line);
         let length = new_record.len();
         let first = new_record.first().expect("records have first tokens");
-        match self.base_layer.get_mut(&length) {
-            Some(second_layer) => {
-                match second_layer.get_mut(&first) {
-                    Some(log_groups) => {
-                        let (score, offset) = log_groups.iter_mut().enumerate().fold(
-                            (
-                                0, // best score
-                                0, // index of best score LogGroup
-                            ),
-                            |mut acc, elem| {
-                                let score = new_record.clone().calc_sim_score(elem.1.event());
-                                if score > acc.0 {
-                                    acc = (score, elem.0); // overwrite state with new values
-                                }
-                                acc
-                            },
-                        );
-                        let score_ratio =
-                            Ratio::<BigInt>::new(BigInt::from(score), BigInt::from(length));
-                        match score_ratio > self.threshold {
-                            true => {
-                                // add this record's uid to the list of examples for the log group
-                                log_groups[offset].add_example(new_record);
-                                Ok(false)
-                            },
-                            false => {
-                                log_groups.push(LogGroup::new(new_record));
-                                Ok(true)
-                            },
-                        }
-                    },
-                    None => {
-                        second_layer.insert(first, vec![LogGroup::new(new_record)]);
+        if let Some(second_layer) = self.base_layer.get_mut(&length) {
+            match second_layer.get_mut(&first) {
+                Some(log_groups) => {
+                    let (score, offset) = log_groups.iter_mut().enumerate().fold(
+                        (
+                            0, // best score
+                            0, // index of best score LogGroup
+                        ),
+                        |mut acc, elem| {
+                            let score = new_record.clone().calc_sim_score(elem.1.event());
+                            if score > acc.0 {
+                                acc = (score, elem.0); // overwrite state with new values
+                            }
+                            acc
+                        },
+                    );
+                    let score_ratio =
+                        Ratio::<BigInt>::new(BigInt::from(score), BigInt::from(length));
+                    if let true = score_ratio > self.threshold {
+                        // add this record's uid to the list of examples for the log group
+                        log_groups[offset].add_example(new_record);
+                        Ok(false)
+                    } else {
+                        log_groups.push(LogGroup::new(new_record));
                         Ok(true)
-                    },
-                }
-            },
-            _ => {
-                self.base_layer.insert(length, HashMap::new());
-                let second_layer = self
-                    .base_layer
-                    .get_mut(&length)
-                    .expect("We just inserted this map");
-                second_layer.insert(first, vec![LogGroup::new(new_record)]);
-                Ok(true)
-            },
+                    }
+                },
+                None => {
+                    second_layer.insert(first, vec![LogGroup::new(new_record)]);
+                    Ok(true)
+                },
+            }
+        } else {
+            self.base_layer.insert(length, HashMap::new());
+            let second_layer = self
+                .base_layer
+                .get_mut(&length)
+                .expect("We just inserted this map");
+            second_layer.insert(first, vec![LogGroup::new(new_record)]);
+            Ok(true)
         }
     }
 
@@ -130,7 +124,7 @@ impl<'a> SimpleDrain {
             let mut groups = vec![];
             for (_, grp) in self.base_layer.get(length).unwrap().iter() {
                 for g in grp {
-                    groups.push(g)
+                    groups.push(g);
                 }
             }
             results.push(groups);
@@ -148,7 +142,7 @@ impl<'a> SimpleDrain {
     }
 }
 
-impl fmt::Display for SimpleDrain {
+impl fmt::Display for SingleLayer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let base = format!(
             "SimpleDrain\nDomain Patterns: {:?}\nSimilarity Threshold: {}\n",
@@ -159,7 +153,7 @@ impl fmt::Display for SimpleDrain {
             .iter_groups()
             .iter()
             .flatten()
-            .map(|e| e.to_string())
+            .map(std::string::ToString::to_string)
             .collect::<Vec<String>>();
         let group_str = groups.iter().join_with("\n");
         write!(f, "{}", [base, lg, group_str.to_string()].join_concat())
@@ -171,19 +165,19 @@ mod should {
     use spectral::prelude::*;
     use tracing_test::traced_test;
 
-    use crate::drains::simple::SimpleDrain;
+    use crate::drains::simple::SingleLayer;
 
     #[traced_test]
     #[test]
     fn test_new_drain() {
-        let drain = SimpleDrain::new(vec![]);
+        let drain = SingleLayer::new(vec![]);
         assert_that(&drain).is_ok();
     }
 
     #[traced_test]
     #[test]
     fn test_set_threshold() {
-        let mut drain = SimpleDrain::new(vec![]).unwrap();
+        let mut drain = SingleLayer::new(vec![]).unwrap();
         let res = drain.set_threshold(100, 200);
         assert_that(&res).is_ok();
     }
@@ -191,7 +185,7 @@ mod should {
     #[traced_test]
     #[test]
     fn test_single_process_line() {
-        let mut drain = SimpleDrain::new(vec![]).unwrap();
+        let mut drain = SingleLayer::new(vec![]).unwrap();
         let line_1 = "Message send failed to remote host: foo.bar.com".to_string();
         let res = drain.process_line(line_1);
         assert_that(&res).is_ok_containing(true);
@@ -200,7 +194,7 @@ mod should {
     #[traced_test]
     #[test]
     fn test_multiple_process_line() {
-        let mut drain = SimpleDrain::new(vec![]).unwrap();
+        let mut drain = SingleLayer::new(vec![]).unwrap();
         let line_1 = "Message send failed to remote host: foo.bar.com".to_string();
         let line_2 = "Message send failed to remote host: bork.bork.com".to_string();
         let line_3 = "Unknown error received from peer".to_string();
@@ -218,7 +212,7 @@ mod should {
         let line_1 = "This is a sequence".to_string();
         let line_2 = "Another different order of words".to_string();
         let line_3 = "Finally one last unique set of character runs".to_string();
-        let mut drain = SimpleDrain::new(vec![]).unwrap();
+        let mut drain = SingleLayer::new(vec![]).unwrap();
         drain.process_line(line_1).unwrap();
         drain.process_line(line_2).unwrap();
         drain.process_line(line_3).unwrap();

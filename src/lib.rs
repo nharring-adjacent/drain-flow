@@ -13,6 +13,6 @@ extern crate custom_derive;
 #[macro_use]
 extern crate enum_derive;
 
+pub mod drains;
 pub mod log_group;
 pub mod record;
-pub mod drains;
