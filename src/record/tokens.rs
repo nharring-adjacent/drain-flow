@@ -10,7 +10,6 @@
 
 use std::{collections::HashMap, fmt};
 
-use crate::INTERNER;
 use anyhow::Error;
 use itertools::Itertools;
 use joinery::JoinableIterator;
@@ -20,6 +19,7 @@ use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 
 use super::ASTERISK;
+use crate::drains::simple::INTERNER;
 
 lazy_static! {
     static ref MATCHERS: RegexSet = Grokker::build_pattern_set();
@@ -114,6 +114,7 @@ impl GrokSet {
             .collect();
         Self { match_types }
     }
+
     pub fn is_numeric(&self) -> bool {
         self.match_types.iter().any(|i| {
             matches!(
@@ -125,6 +126,7 @@ impl GrokSet {
             )
         })
     }
+
     pub fn is_integer(&self) -> bool {
         self.match_types
             .iter()
@@ -157,7 +159,7 @@ impl Token {
             1 => {
                 let idx = matches.iter().collect::<Vec<usize>>()[0];
                 Token::TypedMatch(Grokker::from_match_index(idx).unwrap())
-            }
+            },
             2 => {
                 debug!("2 match arm");
                 // UUID and hostname can overlap, if they do its 99.999% a UUID
@@ -193,7 +195,7 @@ impl Token {
                     return Token::TypedMatch(Grokker::Base16Float);
                 }
                 Token::Wildcard
-            }
+            },
             3 => {
                 debug!("3 match arm");
                 // All base10 integers also match as base16 and weirdly as hostnames
@@ -213,7 +215,7 @@ impl Token {
                     return Token::TypedMatch(Grokker::Base10Float);
                 }
                 Token::Wildcard
-            }
+            },
             // Todo: Explore if there is a way to figure out a "best match"
             _ => Token::Wildcard,
         };
@@ -226,14 +228,18 @@ impl fmt::Display for Token {
         let out: String = match self {
             Token::Wildcard => "*".to_string(),
             Token::TypedMatch(t) => t.to_string(),
-            Token::Value(v) => match v {
-                TypedToken::String(sym) => INTERNER
-                    .read()
-                    .resolve(*sym)
-                    .expect("symbols must resolve")
-                    .to_string(),
-                TypedToken::Int(i) => format!("{}", i),
-                TypedToken::Float(f) => f.to_string(),
+            Token::Value(v) => {
+                match v {
+                    TypedToken::String(sym) => {
+                        INTERNER
+                            .read()
+                            .resolve(*sym)
+                            .expect("symbols must resolve")
+                            .to_string()
+                    },
+                    TypedToken::Int(i) => format!("{}", i),
+                    TypedToken::Float(f) => f.to_string(),
+                }
             },
         };
         write!(f, "{}", out)
@@ -244,13 +250,17 @@ impl From<Token> for DefaultSymbol {
     fn from(tok: Token) -> DefaultSymbol {
         match tok {
             Token::Wildcard => *ASTERISK,
-            Token::TypedMatch(t) => *GROKKER_SYMS
-                .get(&t)
-                .expect("every grokker must have a symbol"),
-            Token::Value(v) => match v {
-                TypedToken::String(s) => s,
-                TypedToken::Int(i) => INTERNER.write().get_or_intern(i.to_string()),
-                TypedToken::Float(f) => INTERNER.write().get_or_intern(f.to_string()),
+            Token::TypedMatch(t) => {
+                *GROKKER_SYMS
+                    .get(&t)
+                    .expect("every grokker must have a symbol")
+            },
+            Token::Value(v) => {
+                match v {
+                    TypedToken::String(s) => s,
+                    TypedToken::Int(i) => INTERNER.write().get_or_intern(i.to_string()),
+                    TypedToken::Float(f) => INTERNER.write().get_or_intern(f.to_string()),
+                }
             },
         }
     }
@@ -363,8 +373,9 @@ impl fmt::Display for TokenStream {
 }
 #[cfg(test)]
 mod should {
-    use crate::record::tokens::{GrokSet, Grokker, Token};
     use proptest::prelude::*;
+
+    use crate::record::tokens::{GrokSet, Grokker, Token};
 
     // The below makes debugging tests much easier
     // use tracing_test::traced_test;

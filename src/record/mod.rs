@@ -13,15 +13,13 @@ extern crate derive_more;
 
 use std::fmt;
 
-use crate::INTERNER;
-
 use lazy_static::lazy_static;
-
 use rksuid::Ksuid;
 use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 
 use self::tokens::{Token, TokenStream, TypedToken};
+use crate::drains::simple::INTERNER;
 
 lazy_static! {
     static ref ASTERISK: DefaultSymbol = INTERNER.write().get_or_intern_static("*");
@@ -97,23 +95,30 @@ pub struct RecordRefIterator<'a> {
 
 impl Iterator for RecordIntoIter {
     type Item = String;
+
     fn next(&mut self) -> Option<String> {
         if self.index >= self.record.len() {
             return None;
         }
         let sym = match self.record.inner.get_token_at_index(self.index) {
-            Some(t) => match t {
-                tokens::Token::Wildcard => "*".to_string(),
-                tokens::Token::TypedMatch(t) => format!("{}", t),
-                tokens::Token::Value(v) => match v {
-                    TypedToken::String(sym) => INTERNER
-                        .read()
-                        .resolve(sym)
-                        .expect("symbol failed to resolve")
-                        .to_owned(),
-                    TypedToken::Int(i) => i.to_string(),
-                    TypedToken::Float(f) => f.to_string(),
-                },
+            Some(t) => {
+                match t {
+                    tokens::Token::Wildcard => "*".to_string(),
+                    tokens::Token::TypedMatch(t) => format!("{}", t),
+                    tokens::Token::Value(v) => {
+                        match v {
+                            TypedToken::String(sym) => {
+                                INTERNER
+                                    .read()
+                                    .resolve(sym)
+                                    .expect("symbol failed to resolve")
+                                    .to_owned()
+                            },
+                            TypedToken::Int(i) => i.to_string(),
+                            TypedToken::Float(f) => f.to_string(),
+                        }
+                    },
+                }
             },
             None => unreachable!(),
         };
@@ -124,8 +129,9 @@ impl Iterator for RecordIntoIter {
 }
 
 impl IntoIterator for Record {
-    type Item = String;
     type IntoIter = RecordIntoIter;
+    type Item = String;
+
     fn into_iter(self) -> Self::IntoIter {
         RecordIntoIter {
             record: self,
@@ -135,6 +141,7 @@ impl IntoIterator for Record {
 }
 impl<'a> Iterator for RecordRefIterator<'a> {
     type Item = Token;
+
     fn next(&mut self) -> Option<Token> {
         if let Some(val) = self.record.inner.get_token_at_index(self.index) {
             self.index += 1;
@@ -144,8 +151,8 @@ impl<'a> Iterator for RecordRefIterator<'a> {
     }
 }
 impl<'a> IntoIterator for &'a Record {
-    type Item = Token;
     type IntoIter = RecordRefIterator<'a>;
+    type Item = Token;
 
     fn into_iter(self) -> Self::IntoIter {
         RecordRefIterator {
@@ -162,12 +169,11 @@ impl fmt::Display for Record {
 }
 #[cfg(test)]
 mod should {
-    use crate::Record;
-    use crate::INTERNER;
     use joinery::{Joinable, JoinableIterator};
-    use proptest::prelude::*;
-    use proptest::string::string_regex;
+    use proptest::{prelude::*, string::string_regex};
     use spectral::prelude::*;
+
+    use crate::{record::Record, drains::simple::INTERNER};
 
     prop_compose! {
         fn gen_word()(s in "[[:alpha:]]+") -> String {

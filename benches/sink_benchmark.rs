@@ -10,10 +10,8 @@
 
 use chrono::Utc;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-
-use drain_flow::SimpleDrain;
+use drain_flow::drains::simple::SimpleDrain;
 use generators::{RecordTemplate, Sendmail};
-
 use rand::Rng;
 
 mod generators;

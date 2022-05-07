@@ -12,10 +12,7 @@ extern crate serde_derive;
 extern crate tinytemplate;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-
-use drain_flow::log_group::LogGroup;
-use drain_flow::record::Record;
-use drain_flow::SimpleDrain;
+use drain_flow::{log_group::LogGroup, record::Record, drains::simple::SimpleDrain};
 
 // Really simplistic benchmark of adding new lines using a constant line
 // this is pretty unrealistic since after the first one the string interner

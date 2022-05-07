@@ -13,7 +13,7 @@ use std::{borrow::Borrow, collections::HashMap, fmt};
 use anyhow::Error;
 use chrono::{DateTime, Utc};
 use rksuid::Ksuid;
-use tracing::{info, instrument};
+use tracing::{debug, instrument};
 
 use crate::record::{tokens::Token, Record};
 
@@ -51,7 +51,7 @@ impl LogGroup {
         let vars = self.discover_variables(&rec).unwrap();
         self.examples.push(rec);
         if !vars.is_empty() {
-            self.updaate_variables(vars);
+            self.update_variables(vars);
         }
     }
 
@@ -74,7 +74,7 @@ impl LogGroup {
                     // This token has already been identified as a variable
                     false
                 } else if event != candidate {
-                    info!(%idx, ?event, ?candidate, "found candidate");
+                    debug!(%idx, ?event, ?candidate, "found candidate");
                     true
                 } else {
                     false
@@ -86,9 +86,9 @@ impl LogGroup {
     }
 
     #[instrument(level = "trace", skip(self, vars))]
-    fn updaate_variables(&mut self, vars: Vec<Wildcard>) {
+    fn update_variables(&mut self, vars: Vec<Wildcard>) {
         for var in vars {
-            // Assume we got vars from discover_variab les so it has already checked against this map
+            // Assume we got vars from discover_variables so it has already checked against this map
             self.variables.insert(var.0 .0, var.0 .1.clone());
             // Update the tokens in the base event as well
             let (offset, _) = self.event.inner.inner[var.0 .0].clone();
@@ -143,14 +143,13 @@ impl fmt::Display for LogGroup {
 
 #[cfg(test)]
 mod should {
+    use spectral::prelude::*;
+
+    use super::Wildcard;
     use crate::{
         log_group::LogGroup,
         record::{tokens::Token, Record},
     };
-
-    use spectral::prelude::*;
-
-    use super::Wildcard;
 
     #[test]
     fn test_discover_variables() {
@@ -168,7 +167,7 @@ mod should {
         let mut lg = LogGroup::new(r1);
 
         let vars = lg.discover_variables(&r2).unwrap();
-        lg.updaate_variables(vars);
+        lg.update_variables(vars);
         assert_that(&lg.variables).contains_key(6);
     }
 }
