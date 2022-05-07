@@ -8,10 +8,8 @@
 // Server Side Public License along with this program.
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt::{self, Display}};
 
-use crate::INTERNER;
-use anyhow::Error;
 use itertools::Itertools;
 use joinery::JoinableIterator;
 use lazy_static::lazy_static;
@@ -20,13 +18,15 @@ use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 
 use super::ASTERISK;
+use crate::drains::simple::INTERNER;
 
 lazy_static! {
     static ref MATCHERS: RegexSet = Grokker::build_pattern_set();
     static ref GROKKER_COUNT: usize = Grokker::iter_variants().count() - 1;
     static ref GROKKER_SYMS: HashMap<Grokker, DefaultSymbol> = symbolize_grokker();
-    static ref GROKKER_VARIANTS: HashMap<usize, Grokker> =
-        HashMap::from_iter(Grokker::iter_variants().enumerate());
+    static ref GROKKER_VARIANTS: HashMap<usize, Grokker> = Grokker::iter_variants()
+        .enumerate()
+        .collect::<HashMap<usize, Grokker>>();
 }
 
 fn symbolize_grokker() -> HashMap<Grokker, DefaultSymbol> {
@@ -53,6 +53,7 @@ custom_derive! {
 }
 
 impl Grokker {
+    #[must_use]
     pub fn to_pattern(self) -> String {
         match self {
             Grokker::Base10Integer => r"^(?:[+-]?(?:[0-9]+))$".to_string(),
@@ -85,7 +86,7 @@ impl Grokker {
 
     fn build_pattern_set() -> RegexSet {
         let variants = Grokker::iter_variants()
-            .map(|v| v.to_pattern())
+            .map(Grokker::to_pattern)
             .collect::<Vec<String>>();
         RegexSet::new(variants).expect("valid regular expressions compile")
     }
@@ -104,8 +105,9 @@ pub struct GrokSet {
     match_types: Vec<Grokker>,
 }
 
-/// GrokSet is a convenience wrapper over Regex::SetMatches and Grokker variants
+/// `GrokSet` is a convenience wrapper over `Regex::SetMatches` and Grokker variants
 impl GrokSet {
+    #[must_use]
     pub fn new(value: &str) -> Self {
         let matches = MATCHERS.matches(value);
         let match_types: Vec<_> = matches
@@ -114,6 +116,8 @@ impl GrokSet {
             .collect();
         Self { match_types }
     }
+
+    #[must_use]
     pub fn is_numeric(&self) -> bool {
         self.match_types.iter().any(|i| {
             matches!(
@@ -125,6 +129,8 @@ impl GrokSet {
             )
         })
     }
+
+    #[must_use]
     pub fn is_integer(&self) -> bool {
         self.match_types
             .iter()
@@ -143,7 +149,7 @@ pub enum Token {
 }
 
 impl Token {
-    #[instrument]
+    #[instrument(level = "trace")]
     pub fn from_parse(input: &str) -> Token {
         let matches = MATCHERS.matches(input);
         let match_types: Vec<_> = matches
@@ -151,19 +157,22 @@ impl Token {
             .filter_map(Grokker::from_match_index)
             .collect();
 
-        debug!(?match_types, "match types, len: {}", matches.len());
+        debug!("comparing {} tokens", match_types.len());
+        
         let tok = match match_types.len() {
-            0 => Token::Value(TypedToken::from_parse(input).unwrap()),
+            0 => Token::Value(TypedToken::from_parse(input)),
             1 => {
                 let idx = matches.iter().collect::<Vec<usize>>()[0];
-                Token::TypedMatch(Grokker::from_match_index(idx).unwrap())
-            }
+                let grokker = Grokker::from_match_index(idx).unwrap();
+                debug!(%grokker, "single match");
+                Token::TypedMatch(grokker)
+            },
             2 => {
-                debug!("2 match arm");
+                debug!(?match_types, "2 match arm");
                 // UUID and hostname can overlap, if they do its 99.999% a UUID
                 if match_types.contains(&Grokker::UUID) && match_types.contains(&Grokker::Hostname)
                 {
-                    debug!("found uuid & hostname");
+                    debug!("uuid & hostname");
                     return Token::TypedMatch(Grokker::UUID);
                 }
                 // All base10 ints match base16 ints
@@ -176,32 +185,33 @@ impl Token {
                 if match_types.contains(&Grokker::Base10Float)
                     && match_types.contains(&Grokker::Base16Float)
                 {
-                    debug!("found base10 and base16 float");
+                    debug!("base10 & base16 float");
                     return Token::TypedMatch(Grokker::Base10Float);
                 }
                 // base16 numbers and hostname can overlap, if they do its 99.999% a number
                 if match_types.contains(&Grokker::Base16Integer)
                     && match_types.contains(&Grokker::Hostname)
                 {
-                    debug!("found base16 and hostname");
+                    debug!("base16 int & hostname");
                     return Token::TypedMatch(Grokker::Base16Integer);
                 }
                 if match_types.contains(&Grokker::Base16Float)
                     && match_types.contains(&Grokker::Hostname)
                 {
-                    debug!("found base16 and hostname");
+                    debug!("base16 float & hostname");
                     return Token::TypedMatch(Grokker::Base16Float);
                 }
+                debug!("fallback to wildcard");
                 Token::Wildcard
-            }
+            },
             3 => {
-                debug!("3 match arm");
+                debug!(?match_types, "3 match arm");
                 // All base10 integers also match as base16 and weirdly as hostnames
                 if match_types.contains(&Grokker::Base10Integer)
                     && match_types.contains(&Grokker::Base16Integer)
                     && match_types.contains(&Grokker::Hostname)
                 {
-                    debug!("found base10 int trying to hide as a hostname");
+                    debug!("base10 int mistaken for hostname");
                     return Token::TypedMatch(Grokker::Base10Integer);
                 }
 
@@ -209,11 +219,12 @@ impl Token {
                     && match_types.contains(&Grokker::Base16Float)
                     && match_types.contains(&Grokker::Hostname)
                 {
-                    debug!("found base 10 float trying to hide as a hostname");
+                    debug!("base 10 float mistaken for hostname");
                     return Token::TypedMatch(Grokker::Base10Float);
                 }
+                debug!("fallback to wildcard");
                 Token::Wildcard
-            }
+            },
             // Todo: Explore if there is a way to figure out a "best match"
             _ => Token::Wildcard,
         };
@@ -226,14 +237,18 @@ impl fmt::Display for Token {
         let out: String = match self {
             Token::Wildcard => "*".to_string(),
             Token::TypedMatch(t) => t.to_string(),
-            Token::Value(v) => match v {
-                TypedToken::String(sym) => INTERNER
-                    .read()
-                    .resolve(*sym)
-                    .expect("symbols must resolve")
-                    .to_string(),
-                TypedToken::Int(i) => format!("{}", i),
-                TypedToken::Float(f) => f.to_string(),
+            Token::Value(v) => {
+                match v {
+                    TypedToken::String(sym) => {
+                        INTERNER
+                            .read()
+                            .resolve(*sym)
+                            .expect("symbols must resolve")
+                            .to_string()
+                    },
+                    TypedToken::Int(i) => format!("{}", i),
+                    TypedToken::Float(f) => f.to_string(),
+                }
             },
         };
         write!(f, "{}", out)
@@ -244,13 +259,17 @@ impl From<Token> for DefaultSymbol {
     fn from(tok: Token) -> DefaultSymbol {
         match tok {
             Token::Wildcard => *ASTERISK,
-            Token::TypedMatch(t) => *GROKKER_SYMS
-                .get(&t)
-                .expect("every grokker must have a symbol"),
-            Token::Value(v) => match v {
-                TypedToken::String(s) => s,
-                TypedToken::Int(i) => INTERNER.write().get_or_intern(i.to_string()),
-                TypedToken::Float(f) => INTERNER.write().get_or_intern(f.to_string()),
+            Token::TypedMatch(t) => {
+                *GROKKER_SYMS
+                    .get(&t)
+                    .expect("every grokker must have a symbol")
+            },
+            Token::Value(v) => {
+                match v {
+                    TypedToken::String(s) => s,
+                    TypedToken::Int(i) => INTERNER.write().get_or_intern(i.to_string()),
+                    TypedToken::Float(f) => INTERNER.write().get_or_intern(f.to_string()),
+                }
             },
         }
     }
@@ -267,9 +286,10 @@ pub enum TypedToken {
 }
 
 impl TypedToken {
-    pub fn from_parse(input: &str) -> Result<TypedToken, Error> {
-        let sym = INTERNER.write().get_or_intern(input);
-        Ok(TypedToken::String(sym))
+    /// Parses supplied string and returns a token
+    #[must_use]
+    pub fn from_parse(input: &str) -> TypedToken {
+        TypedToken::String(INTERNER.write().get_or_intern(input))
     }
 }
 
@@ -278,6 +298,13 @@ pub struct Offset {
     start: usize,
     end: usize,
 }
+
+impl Display for Offset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Offset(start: {}, end: {})", self.start, self.end)
+    }
+}
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TokenStream {
@@ -333,9 +360,10 @@ impl TokenStream {
 
     #[instrument(skip(self))]
     pub fn get_token_at_index(&self, idx: usize) -> Option<Token> {
-        match idx < self.inner.len() {
-            true => Some(self.inner[idx].1.clone()),
-            false => None,
+        if let true = idx < self.inner.len() {
+            Some(self.inner[idx].1.clone())
+        } else {
+            None
         }
     }
 }
@@ -363,8 +391,9 @@ impl fmt::Display for TokenStream {
 }
 #[cfg(test)]
 mod should {
-    use crate::record::tokens::{GrokSet, Grokker, Token};
     use proptest::prelude::*;
+
+    use crate::record::tokens::{GrokSet, Grokker, Token};
 
     // The below makes debugging tests much easier
     // use tracing_test::traced_test;

@@ -13,15 +13,13 @@ extern crate derive_more;
 
 use std::fmt;
 
-use crate::INTERNER;
-
 use lazy_static::lazy_static;
-
 use rksuid::Ksuid;
 use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 
 use self::tokens::{Token, TokenStream, TypedToken};
+use crate::drains::simple::INTERNER;
 
 lazy_static! {
     static ref ASTERISK: DefaultSymbol = INTERNER.write().get_or_intern_static("*");
@@ -66,7 +64,7 @@ impl Record {
 
     #[instrument(level = "trace", skip(self))]
     pub fn first(&self) -> Option<DefaultSymbol> {
-        self.inner.first().map(|f| f.into())
+        self.inner.first().map(std::convert::Into::into)
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -81,39 +79,46 @@ impl Record {
 
     #[instrument(level = "trace")]
     pub fn resolve(sym: DefaultSymbol) -> Option<String> {
-        INTERNER.read().resolve(sym).map(|s| s.to_owned())
+        INTERNER.read().resolve(sym).map(std::borrow::ToOwned::to_owned)
     }
 }
 
-pub struct RecordIntoIter {
+pub struct IntoIter {
     record: Record,
     index: usize,
 }
 
-pub struct RecordRefIterator<'a> {
+pub struct RefIterator<'a> {
     record: &'a Record,
     index: usize,
 }
 
-impl Iterator for RecordIntoIter {
+impl Iterator for IntoIter {
     type Item = String;
+
     fn next(&mut self) -> Option<String> {
         if self.index >= self.record.len() {
             return None;
         }
         let sym = match self.record.inner.get_token_at_index(self.index) {
-            Some(t) => match t {
-                tokens::Token::Wildcard => "*".to_string(),
-                tokens::Token::TypedMatch(t) => format!("{}", t),
-                tokens::Token::Value(v) => match v {
-                    TypedToken::String(sym) => INTERNER
-                        .read()
-                        .resolve(sym)
-                        .expect("symbol failed to resolve")
-                        .to_owned(),
-                    TypedToken::Int(i) => i.to_string(),
-                    TypedToken::Float(f) => f.to_string(),
-                },
+            Some(t) => {
+                match t {
+                    tokens::Token::Wildcard => "*".to_string(),
+                    tokens::Token::TypedMatch(t) => format!("{}", t),
+                    tokens::Token::Value(v) => {
+                        match v {
+                            TypedToken::String(sym) => {
+                                INTERNER
+                                    .read()
+                                    .resolve(sym)
+                                    .expect("symbol failed to resolve")
+                                    .to_owned()
+                            },
+                            TypedToken::Int(i) => i.to_string(),
+                            TypedToken::Float(f) => f.to_string(),
+                        }
+                    },
+                }
             },
             None => unreachable!(),
         };
@@ -124,17 +129,19 @@ impl Iterator for RecordIntoIter {
 }
 
 impl IntoIterator for Record {
+    type IntoIter = IntoIter;
     type Item = String;
-    type IntoIter = RecordIntoIter;
+
     fn into_iter(self) -> Self::IntoIter {
-        RecordIntoIter {
+        IntoIter {
             record: self,
             index: 0,
         }
     }
 }
-impl<'a> Iterator for RecordRefIterator<'a> {
+impl<'a> Iterator for RefIterator<'a> {
     type Item = Token;
+
     fn next(&mut self) -> Option<Token> {
         if let Some(val) = self.record.inner.get_token_at_index(self.index) {
             self.index += 1;
@@ -144,11 +151,11 @@ impl<'a> Iterator for RecordRefIterator<'a> {
     }
 }
 impl<'a> IntoIterator for &'a Record {
+    type IntoIter = RefIterator<'a>;
     type Item = Token;
-    type IntoIter = RecordRefIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        RecordRefIterator {
+        RefIterator {
             record: self,
             index: 0,
         }
@@ -162,12 +169,11 @@ impl fmt::Display for Record {
 }
 #[cfg(test)]
 mod should {
-    use crate::Record;
-    use crate::INTERNER;
     use joinery::{Joinable, JoinableIterator};
-    use proptest::prelude::*;
-    use proptest::string::string_regex;
+    use proptest::{prelude::*, string::string_regex};
     use spectral::prelude::*;
+
+    use crate::{drains::simple::INTERNER, record::Record};
 
     prop_compose! {
         fn gen_word()(s in "[[:alpha:]]+") -> String {

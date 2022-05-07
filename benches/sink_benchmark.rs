@@ -10,17 +10,15 @@
 
 use chrono::Utc;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-
-use drain_flow::SimpleDrain;
+use drain_flow::drains::simple::SingleLayer;
 use generators::{RecordTemplate, Sendmail};
-
 use rand::Rng;
 
 mod generators;
 use self::generators::LogGenerator;
 
 pub fn benchmark_sink(c: &mut Criterion) {
-    let mut drain = SimpleDrain::new(vec![]).unwrap();
+    let mut drain = SingleLayer::new(vec![]).unwrap();
     let generator = LogGenerator::new().unwrap();
     let mut rng = rand::thread_rng();
     for size in [100usize, 500usize, 1000usize, 5000usize] {

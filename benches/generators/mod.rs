@@ -71,12 +71,12 @@ pub(crate) struct Syslog {
     pub severity: String,
 }
 
-const NGINX_TEMPLATE: &'static str = "{ foo }";
-const QMAIL_TEMPLATE: &'static str = "{ foo }";
-const SENDMAIL_TEMPLATE: &'static str =
+const NGINX_TEMPLATE: &str = "{ foo }";
+const QMAIL_TEMPLATE: &str = "{ foo }";
+const SENDMAIL_TEMPLATE: &str =
     "{ ts } Sent to { remote } with status: { status }, remote said { message }";
-const SLOW_QUERY_TEMPLATE: &'static str = "{ foo }";
-const SYSLOG_TEMPLATE: &'static str = "{ foo }";
+const SLOW_QUERY_TEMPLATE: &str = "{ foo }";
+const SYSLOG_TEMPLATE: &str = "{ foo }";
 
 pub(crate) struct LogGenerator<'a> {
     tiny: TinyTemplate<'a>,
