@@ -1,6 +1,6 @@
 [package]
 name = "drain-flow"
-version = "0.5.0-pre1"
+version = "0.5.1"
 edition = "2021"
 
 [dependencies]
@@ -9,8 +9,8 @@ chrono = "0.4.19"
 custom_derive = "0.1.7"
 derive_more = "0.99.17"
 enum_derive = "0.1.7"
-float_eq = "0.7.0"
-fraction = "0.10.0"
+float_eq = "1.0.0"
+fraction = "0.11.0"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
 joinery = "2.1.0"
