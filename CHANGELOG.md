@@ -1,3 +1,6 @@
+# 0.5.2
+## Updates
+- Update version for anyhow, chrono, fraction, joinery, parking_lot, regex, tracing as well as serde and tracing-test in dev-dependencies
 # 0.5.0-pre1
 
 ## Breaking Changes
