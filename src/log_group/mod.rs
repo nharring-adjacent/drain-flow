@@ -70,7 +70,7 @@ impl LogGroup {
             .enumerate()
             .zip(rec.into_iter())
             .filter(|((idx, event), candidate)| {
-                if self.variables.get(idx).is_some() {
+                if self.variables.contains_key(idx) {
                     // This token has already been identified as a variable
                     false
                 } else if event != candidate {

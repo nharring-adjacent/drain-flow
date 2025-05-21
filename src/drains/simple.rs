@@ -34,7 +34,7 @@ pub struct SingleLayer {
     strings: Arc<RwLock<StringInterner>>,
 }
 
-impl<'a> SingleLayer {
+impl SingleLayer {
     #[instrument(skip(domain))]
     pub fn new(domain: Vec<String>) -> Result<Self, Error> {
         let patterns = domain
@@ -92,7 +92,7 @@ impl<'a> SingleLayer {
                     );
                     let score_ratio =
                         Ratio::<BigInt>::new(BigInt::from(score), BigInt::from(length));
-                    if let true = score_ratio > self.threshold {
+                    if score_ratio > self.threshold {
                         // add this record's uid to the list of examples for the log group
                         log_groups[offset].add_example(new_record);
                         Ok(false)

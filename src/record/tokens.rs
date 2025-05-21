@@ -31,7 +31,7 @@ lazy_static! {
 
 fn symbolize_grokker() -> HashMap<Grokker, DefaultSymbol> {
     Grokker::iter_variants()
-        .map(|v| (v, INTERNER.write().get_or_intern(&v.to_string())))
+        .map(|v| (v, INTERNER.write().get_or_intern(v.to_string())))
         .collect::<HashMap<Grokker, DefaultSymbol>>()
 }
 
@@ -360,7 +360,7 @@ impl TokenStream {
 
     #[instrument(skip(self))]
     pub fn get_token_at_index(&self, idx: usize) -> Option<Token> {
-        if let true = idx < self.inner.len() {
+        if idx < self.inner.len() {
             Some(self.inner[idx].1.clone())
         } else {
             None
@@ -510,28 +510,28 @@ mod should {
 
         #[test]
         fn test_grokset_isnumeric_float10(u in gen_float10()) {
-            let line = format!("{}", u);
+            let line = u.to_string();
             let grokset = GrokSet::new(&line);
             prop_assert!(grokset.is_numeric(), "GrokSet should indicate is_numeric");
         }
 
         #[test]
         fn test_grokset_isnumeric_in10(u in gen_int10()) {
-            let line = format!("{}", u);
+            let line = u.to_string();
             let grokset = GrokSet::new(&line);
             prop_assert!(grokset.is_numeric(), "GrokSet should indicate is_numeric");
         }
 
         #[test]
         fn test_grokset_isnumeric_float16(u in gen_float16()) {
-            let line = format!("{}", u);
+            let line = u.to_string();
             let grokset = GrokSet::new(&line);
             prop_assert!(grokset.is_numeric(), "GrokSet should indicate is_numeric");
         }
 
         #[test]
         fn test_grokset_isnumeric_int16(u in gen_int16()) {
-            let line = format!("{}", u);
+            let line = u.to_string();
             let grokset = GrokSet::new(&line);
             prop_assert!(grokset.is_numeric(), "GrokSet should indicate is_numeric");
         }
