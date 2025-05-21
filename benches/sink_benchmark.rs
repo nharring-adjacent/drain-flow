@@ -23,7 +23,6 @@ pub fn benchmark_sink(c: &mut Criterion) {
     let mut rng = rand::thread_rng();
     for size in [100usize, 500usize, 1000usize, 5000usize] {
         let lines = (0..size)
-            .into_iter()
             .map(|_| {
                 generator.make_record(RecordTemplate::Sendmail(Sendmail {
                     ts: Utc::now().to_string(),

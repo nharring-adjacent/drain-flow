@@ -16,7 +16,7 @@ use tinytemplate::TinyTemplate;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) enum RecordTemplate {
-    JSON(JSON),
+    Json(Json),
     NGINXAccess(NGINXAccess),
     Qmail(Qmail),
     Sendmail(Sendmail),
@@ -25,7 +25,7 @@ pub(crate) enum RecordTemplate {
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct JSON {
+pub(crate) struct Json {
     pub event_type: String,
     pub callsite: String,
     pub app_name: String,
@@ -82,7 +82,7 @@ pub(crate) struct LogGenerator<'a> {
     tiny: TinyTemplate<'a>,
 }
 
-impl<'a> LogGenerator<'_> {
+impl LogGenerator<'_> {
     pub fn new() -> Result<Self, Error> {
         let mut tt = TinyTemplate::new();
         tt.add_template("nginx", NGINX_TEMPLATE)?;
@@ -95,7 +95,7 @@ impl<'a> LogGenerator<'_> {
 
     pub(crate) fn make_record(&self, template: RecordTemplate) -> String {
         match template {
-            RecordTemplate::JSON(j) => serde_json::to_string(&j).expect(""),
+            RecordTemplate::Json(j) => serde_json::to_string(&j).expect(""),
             RecordTemplate::NGINXAccess(n) => self.tiny.render("nginx", &n).expect(""),
             RecordTemplate::Qmail(q) => self.tiny.render("qmail", &q).expect(""),
             RecordTemplate::Sendmail(s) => self.tiny.render("sendmail", &s).expect(""),
