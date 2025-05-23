@@ -1,22 +1,25 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap; 
 use std::sync::Arc;
 
 use differential_dataflow::input::InputSession;
 use differential_dataflow::operators::iterate::Variable;
-use differential_dataflow::operators::{Collection, Map, Consolidate, Join, Reduce};
+// Corrected DD operator imports; Collection is top-level, Map removed (using timely's Map)
+use differential_dataflow::{Collection, operators::{Join, Reduce, Consolidate}}; 
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use string_interner::StringInterner;
 use timely::dataflow::scopes::Child;
-use timely::dataflow::operators::Filter;
+use timely::dataflow::operators::{Filter, Map}; // Added timely::dataflow::operators::Map
+use timely::communication::allocator::Allocate;
+use timely::worker::Worker;
 use timely::progress::Timestamp;
-use timely::progress::timestamp::RootTimestamp;
+use timely::progress::timestamp::RootTimestamp; // Verified this path
 use uuid::Uuid;
+// Abomonation import removed.
+// Rkyv imports removed.
+use serde::{Serialize, Deserialize}; // Added serde imports
 
-// Assuming Record is defined elsewhere and is Clone + Send + 'static
-// For now, let's use the Record from the simple drain.
-// This is a placeholder and might need adjustment.
-use crate::record::Record; // Assuming this path is correct
+use crate::record::Record;
 
 lazy_static! {
     pub(crate) static ref INTERNER: Arc<RwLock<StringInterner>> =
@@ -24,26 +27,27 @@ lazy_static! {
 }
 
 // Enum to represent different types of aggregations for log fields
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Abomonation)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum FieldAggregation {
     Sum(u64),
-    Average(f64), // Placeholder, not fully implemented in aggregation logic
+    Average(f64), // TODO: Implement robust Average aggregation
     DistinctValues(Vec<String>),
 }
 
 // Represents the template of a log group, with potential wildcards.
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Abomonation)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct LogTemplate {
-    pub id: Uuid,
-    pub tokens: Vec<Option<String>>, // None represents a wildcard <*>
+    // #[with(uuid_rkyv_adapter::UuidAsBytes)] // Removed rkyv attribute
+    pub id: Uuid, // Uuid with "serde" feature should work directly
+    pub tokens: Vec<Option<String>>, 
 }
 
 // Data associated with each log event/record that's processed.
 #[derive(Debug, Clone)]
-pub struct MatchedLogEvent<T: Timestamp> {
-    template: LogTemplate, // The template that was matched
-    timestamp: T,
-    params: Vec<(String, ExtractedParamValue)>, // (param_name, value)
+pub struct MatchedLogEvent<TS: Timestamp> { // TS for Timestamp
+    template: LogTemplate, 
+    timestamp: TS,
+    params: Vec<(String, ExtractedParamValue)>, 
 }
 
 #[derive(Debug, Clone)]
@@ -53,29 +57,31 @@ pub enum ExtractedParamValue {
 }
 
 // State maintained for each active log template in the iteration variable.
-#[derive(Debug, Clone, Abomonation)]
-pub struct TemplateState<T: Timestamp> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateState<TS: Timestamp> { 
     template: LogTemplate,
     count: u64,
-    first_seen_timestamp: T,
-    last_updated_timestamp: T,
+    first_seen_timestamp: TS,
+    last_updated_timestamp: TS,
     aggregated_fields: HashMap<String, FieldAggregation>,
 }
 
 // Structure to represent a log group in Differential Dataflow (output)
-#[derive(Debug, Clone, PartialEq, Abomonation)] // Removed Hash, Eq due to f64
-pub struct LogGroupDD<T: Timestamp> {
-    pub template_id: Uuid,
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)] 
+pub struct LogGroupDD<TS: Timestamp> { 
+    // #[with(uuid_rkyv_adapter::UuidAsBytes)] // Removed rkyv attribute
+    pub template_id: Uuid, // Uuid with "serde" feature should work directly
     pub template_str: String,
     pub count: u64,
-    pub first_seen_timestamp: T,
-    pub last_updated_timestamp: T,
+    pub first_seen_timestamp: TS,
+    pub last_updated_timestamp: TS,
     pub rate: f64,
-    pub rate_of_change: f64, // Placeholder for now
+    pub rate_of_change: f64, // TODO: Implement rate of change calculation
     pub aggregated_fields: HashMap<String, FieldAggregation>,
-    #[abomonate_ignore]
-    pub internal_template_tokens: Vec<Option<String>>,
+    pub internal_template_tokens: Vec<Option<String>>, 
 }
+
+// uuid_rkyv_adapter module removed.
 
 fn generate_template_tokens_from_record(record: &Record) -> Vec<Option<String>> {
     let interner = INTERNER.read();
@@ -93,29 +99,28 @@ fn generate_template_tokens_from_record(record: &Record) -> Vec<Option<String>> 
         .collect()
 }
 
-fn extract_parameters_from_record<T: Timestamp>(
+fn extract_parameters_from_record<TS: Timestamp>( // TS for Timestamp
     record: &Record,
     matched_template: &LogTemplate,
-    timestamp: T,
-) -> MatchedLogEvent<T> {
+    timestamp: TS,
+) -> MatchedLogEvent<TS> {
     let mut params = Vec::new();
     let interner = INTERNER.read();
     let record_raw_tokens = record.tokens();
 
     for (i, template_token_opt) in matched_template.tokens.iter().enumerate() {
-        if template_token_opt.is_none() {
-            if i < record_raw_tokens.len() {
-                let param_val_str = interner
-                    .resolve(record_raw_tokens[i])
-                    .unwrap_or("")
-                    .to_string();
-                let param_name = format!("param_{}", i);
+        if template_token_opt.is_none() && i < record_raw_tokens.len() {
+            // This position is a wildcard in the template, and the record has a token here.
+            let param_val_str = interner
+                .resolve(record_raw_tokens[i])
+                .unwrap_or("")
+                .to_string();
+            let param_name = format!("param_{}", i);
 
-                if let Ok(num_val) = param_val_str.parse::<f64>() {
-                    params.push((param_name, ExtractedParamValue::Numeric(num_val)));
-                } else {
-                    params.push((param_name, ExtractedParamValue::Text(param_val_str)));
-                }
+            if let Ok(num_val) = param_val_str.parse::<f64>() {
+                params.push((param_name, ExtractedParamValue::Numeric(num_val)));
+            } else {
+                params.push((param_name, ExtractedParamValue::Text(param_val_str)));
             }
         }
     }
@@ -134,21 +139,24 @@ fn format_template_tokens(tokens: &[Option<String>]) -> String {
         .join(" ")
 }
 
-pub struct DifferentialDrain<'a, W: timely::worker::Worker>
-where
-    W::Timestamp: timely::progress::Timestamp + timely::progress::PathSummary<W::Timestamp> + Ord + Abomonation + Clone,
+// TS is the Timestamp type, A is the Allocator type for the worker.
+pub struct DifferentialDrain<'a, A, TS> 
+where 
+    A: Allocate,
+    TS: Timestamp + Clone + Ord + Send + 'static + serde::Serialize + for<'de> serde::Deserialize<'de>,
 {
-    raw_log_line_input: InputSession<W::Timestamp, (String, W::Timestamp), isize>,
-    pub log_groups_collection: Collection<Child<'a, W, W::Timestamp>, LogGroupDD<W::Timestamp>, isize>,
+    raw_log_line_input: InputSession<TS, (String, TS), isize>,
+    pub log_groups_collection: Collection<Child<'a, Worker<A>, TS>, LogGroupDD<TS>, isize>,
 }
 
-impl<'a, W: timely::worker::Worker> DifferentialDrain<'a, W>
+impl<'a, A, TS> DifferentialDrain<'a, A, TS>
 where
-    W::Timestamp: timely::progress::Timestamp + timely::progress::PathSummary<W::Timestamp> + Ord + Abomonation + Clone + Send + 'static,
-    Record: abomonation::Abomonation + Clone + Send + 'static,
+    A: Allocate,
+    TS: Timestamp + Clone + Ord + Send + 'static + serde::Serialize + for<'de> serde::Deserialize<'de>,
+    Record: serde::Serialize + for<'de> serde::Deserialize<'de> + Clone + Send + 'static,
 {
-    pub fn new(scope: &mut Child<'a, W, W::Timestamp>) -> Self {
-        let (raw_log_line_input, raw_log_lines_with_ts) = scope.new_collection::<(String, W::Timestamp), isize>();
+    pub fn new(scope: &mut Child<'a, Worker<A>, TS>) -> Self { // Scope is already correctly Child<'a, Worker<A>, TS>
+        let (raw_log_line_input, raw_log_lines_with_ts) = scope.new_collection::<(String, TS), isize>(); // Confirmed TS
         let tokenized_records_with_ts = raw_log_lines_with_ts.map(|(line, ts)| (Record::new(line), ts));
         let similarity_threshold = 0.6;
 
@@ -230,9 +238,9 @@ where
                 .concat(&single_event_states);
 
             let feedback = all_state_inputs.reduce_u(move |_template_id_key, inputs, output| {
-                let mut merged_state: Option<TemplateState<W::Timestamp>> = None;
+                let mut merged_state: Option<TemplateState<TS>> = None; // Confirmed TS
                 for (_time, val_diff_tuple) in inputs {
-                    let current_event_state = val_diff_tuple.0;
+                    let current_event_state = &val_diff_tuple.0; 
                     if merged_state.is_none() {
                         merged_state = Some(current_event_state.clone());
                     } else {
@@ -287,43 +295,29 @@ where
         DifferentialDrain { raw_log_line_input, log_groups_collection: final_log_groups }
     }
 
-    pub fn process_line(&mut self, line: String, time: W::Timestamp) {
+    pub fn process_line(&mut self, line: String, time: TS) { // Confirmed TS
         self.raw_log_line_input.update_at((line, time.clone()), time, 1);
     }
 
-    pub fn flush(&mut self, time: W::Timestamp) {
+    pub fn flush(&mut self, time: TS) { // Confirmed TS
         self.raw_log_line_input.advance_to(time);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    type LogId = u64; // Define LogId for the test module as it was missing
     use super::*;
     use timely::communication::allocator::Thread;
-    use timely::worker::Worker;
-    // use timely::dataflow::operators::{Input, ToStream, Inspect}; // Not directly used with session
-    // use differential_dataflow::operators::Count; // Not directly used for output
-    use super::*;
-    use timely::communication::allocator::Thread;
-    use timely::worker::Worker;
+    use timely::worker::Worker; 
     use differential_dataflow::operators::probe::Handle as ProbeHandle;
-    // InputSession is part of DifferentialDrain's API via process_line, not directly manipulated by test harness.
-    // Tests will call drain.process_line() and drain.flush().
-    use std::collections::BTreeMap; 
-    use timely::progress::timestamp::RootTimestamp; // Standard for tests if not using u64 directly.
+    use std::collections::{BTreeMap, HashSet}; 
+    use timely::progress::timestamp::RootTimestamp; 
 
-    // Test harness for DifferentialDrain.
-    // It sets up a Timely worker and provides the drain instance and probe handles to the test logic.
-    // Note: The main code uses W::Timestamp (e.g. u64), but tests often use RootTimestamp for simplicity
-    // if the underlying logic doesn't strictly depend on specific timestamp properties beyond Ord + Clone.
-    // Here, we align with the main code's W::Timestamp which is generic but often u64 in examples.
-    // For tests, we'll use RootTimestamp as it's common for test setups if not specified.
-    // If DifferentialDrain is specialized to u64, tests should use u64.
-    // The current DifferentialDrain is generic for W::Timestamp.
     fn run_drain_scenario(
         test_fn: impl FnOnce(
             &mut Worker<Thread>, 
-            &mut DifferentialDrain<Worker<Thread>>, // Using generic Timestamp from Worker
+            &mut DifferentialDrain<Thread, RootTimestamp>, 
             &mut ProbeHandle<RootTimestamp, LogGroupDD<RootTimestamp>>, 
             &mut ProbeHandle<RootTimestamp, (LogId, Uuid)>      
         ) + Send + 'static
@@ -332,143 +326,121 @@ mod tests {
             let mut log_groups_probe = ProbeHandle::new();
             let mut assignments_probe = ProbeHandle::new(); 
             
-            worker.dataflow(|scope| {
-                let mut drain = DifferentialDrain::new(scope);
-                drain.log_groups_collection.probe_with(&mut probe);
-                test_fn(worker, &mut drain, &mut probe);
+            worker.dataflow(|scope| { // scope here is Child<'worker, Worker<Thread>, RootTimestamp>
+                let mut drain = DifferentialDrain::new(scope); // new expects &mut Child<'a, Worker<A>, TS>
+                                                              // Here A=Thread, TS=RootTimestamp, which matches.
+                drain.log_groups_collection.probe_with(&mut log_groups_probe);
+                test_fn(worker, &mut drain, &mut log_groups_probe, &mut assignments_probe);
             });
         }).expect("Timely dataflow computation failed.");
     }
 
+    // Helper to collect the final state of LogGroupDDs from a probe.
+    fn get_final_log_groups_map(probe: &mut ProbeHandle<RootTimestamp, LogGroupDD<RootTimestamp>>) -> HashMap<Uuid, LogGroupDD<RootTimestamp>> {
+        let mut groups_map = HashMap::new();
+        probe.with_read(|data| {
+            for (_time, data_in_batch) in data.iter() {
+                for (log_group, _event_ts, diff) in data_in_batch.iter() {
+                    if *diff > 0 {
+                        groups_map.insert(log_group.template_id, log_group.clone());
+                    } else {
+                        // If the exact log_group state was previously inserted and now retracted.
+                        if groups_map.get(&log_group.template_id).map_or(false, |g| g == log_group) {
+                             groups_map.remove(&log_group.template_id);
+                        }
+                    }
+                }
+            }
+        });
+        groups_map.retain(|_, g| g.count > 0); 
+        groups_map
+    }
 
     #[test]
     fn test_identical_log_lines_clustering() {
-        run_drain_scenario(|worker, drain, probe| {
+        run_drain_scenario(|worker, drain, lg_probe, _assign_probe| { 
             let ts_start = RootTimestamp::new(1);
-            drain.process_line("Test message 1".to_string(), ts_start);
+            drain.process_line("Test message 1".to_string(), ts_start.clone());
             drain.process_line("Test message 1".to_string(), RootTimestamp::new(ts_start.inner + 1));
             drain.process_line("Test message 1".to_string(), RootTimestamp::new(ts_start.inner + 2));
             
             let final_ts = RootTimestamp::new(ts_start.inner + 3);
-            drain.flush(final_ts);
-            worker.step_while(|| probe.less_than(&final_ts));
+            drain.flush(final_ts.clone());
+            worker.step_while(|| lg_probe.less_than(&final_ts));
 
-            let mut groups: Vec<LogGroupDD<RootTimestamp>> = Vec::new();
-            probe.with_read(|data| {
-                // Data is Vec< (RootTimestamp, Vec<( (K,V), T, R )>) >
-                // For probe on collection, it's Vec< (RootTimestamp, Vec<(D, T, R)>) >
-                // Here D = LogGroupDD<RootTimestamp>
-                for (_time_of_batch, data_in_batch) in data.iter() {
-                    for (log_group, _logical_time, diff_val) in data_in_batch.iter() {
-                        if *diff_val > 0 { // Consider only additions for final state
-                           groups.push(log_group.clone());
-                        }
-                    }
-                }
-            });
+            let groups_map = get_final_log_groups_map(lg_probe);
+            assert_eq!(groups_map.len(), 1, "Should only find one group for identical messages");
             
-            // Due to iterative nature, there might be intermediate versions. We need the final one.
-            // A better way is to collect into a BTreeMap or HashMap in probe.with_read
-            // if multiple updates for the same group ID can occur.
-            // For this simple case, expecting one final group.
-            let final_groups: Vec<_> = groups.into_iter().filter(|g| g.last_updated_timestamp == RootTimestamp::new(ts_start.inner +2)).collect();
-
-
-            assert_eq!(final_groups.len(), 1, "Should only find one group for identical messages");
-            if let Some(group) = final_groups.get(0) {
-                assert_eq!(group.count, 3);
-                assert_eq!(group.template_str, "Test message 1");
-                assert_eq!(group.first_seen_timestamp, ts_start);
-                assert_eq!(group.last_updated_timestamp, RootTimestamp::new(ts_start.inner + 2));
-            } else {
-                 panic!("No final group found. All groups: {:?}", groups); // groups might be empty or have intermediate states
-            }
+            let group = groups_map.values().next().expect("Should have one group");
+            assert_eq!(group.count, 3);
+            assert_eq!(group.template_str, "Test message 1");
+            assert_eq!(group.first_seen_timestamp, ts_start);
+            assert_eq!(group.last_updated_timestamp, RootTimestamp::new(ts_start.inner + 2));
         });
     }
+    
+    // Other existing tests need to be updated to use RootTimestamp consistently
+    // and potentially the new helper get_final_log_groups_map for clarity in assertions.
+    // Also, if they use assign_probe, its argument should be passed.
 
     #[test]
     fn test_parameterized_log_lines_clustering() {
-        run_drain_scenario(|worker, drain, probe| {
+        run_drain_scenario(|worker, drain, lg_probe, _assign_probe| {
             let ts_start = RootTimestamp::new(10);
-            drain.process_line("User 123 logged in".to_string(), ts_start);
+            drain.process_line("User 123 logged in".to_string(), ts_start.clone());
             drain.process_line("User 456 logged in".to_string(), RootTimestamp::new(ts_start.inner + 1));
             
             let final_ts = RootTimestamp::new(ts_start.inner + 2);
-            drain.flush(final_ts);
-            worker.step_while(|| probe.less_than(&final_ts));
+            drain.flush(final_ts.clone());
+            worker.step_while(|| lg_probe.less_than(&final_ts));
 
-            let mut groups: Vec<LogGroupDD<RootTimestamp>> = Vec::new();
-            probe.with_read(|data| {
-                for (_batch_ts, data_in_batch) in data.iter() {
-                    for (log_group, _event_ts, diff) in data_in_batch.iter() {
-                        if *diff > 0 { groups.push(log_group.clone()); }
-                    }
-                }
-            });
-            let final_groups: Vec<_> = groups.into_iter().filter(|g| g.last_updated_timestamp == RootTimestamp::new(ts_start.inner + 1)).collect();
-
-
-            assert_eq!(final_groups.len(), 1, "Should group parameterized lines together");
-            if let Some(group) = final_groups.get(0) {
+            let groups_map = get_final_log_groups_map(lg_probe);
+            assert_eq!(groups_map.len(), 1, "Should group parameterized lines together");
+            if let Some(group) = groups_map.values().next() {
                 assert_eq!(group.count, 2);
                 assert_eq!(group.template_str, "User <*> logged in");
             } else {
-                panic!("No final group found. All groups: {:?}", groups);
+                panic!("No group found for parameterized lines test.");
             }
         });
     }
 
     #[test]
     fn test_different_log_lines_separate_groups() {
-         run_drain_scenario(|worker, drain, probe| {
-            let ts_start = RootTimestamp::new(20);
-            drain.process_line("First distinct message".to_string(), ts_start);
-            drain.process_line("Second distinct message".to_string(), RootTimestamp::new(ts_start.inner + 1));
+         run_drain_scenario(|worker, drain, lg_probe, _assign_probe| {
+            let ts1 = RootTimestamp::new(20);
+            let ts2 = RootTimestamp::new(21);
+            drain.process_line("First distinct message".to_string(), ts1.clone());
+            drain.process_line("Second distinct message".to_string(), ts2.clone());
             
-            let final_ts = RootTimestamp::new(ts_start.inner + 2);
-            drain.flush(final_ts);
-            worker.step_while(|| probe.less_than(&final_ts));
+            let final_ts = RootTimestamp::new(22);
+            drain.flush(final_ts.clone());
+            worker.step_while(|| lg_probe.less_than(&final_ts));
 
-            let mut group_templates: HashSet<String> = HashSet::new();
-             probe.with_read(|data| {
-                for (_batch_ts, data_in_batch) in data.iter() {
-                    for (log_group, _event_ts, diff) in data_in_batch.iter() {
-                        if *diff > 0 && (log_group.last_updated_timestamp == ts_start || log_group.last_updated_timestamp == RootTimestamp::new(ts_start.inner+1)) { 
-                            group_templates.insert(log_group.template_str.clone()); 
-                        }
-                    }
-                }
-            });
+            let groups_map = get_final_log_groups_map(lg_probe);
+            assert_eq!(groups_map.len(), 2, "Should find two distinct groups.");
             
-            assert_eq!(group_templates.len(), 2, "Should find two distinct groups. Found: {:?}", group_templates);
-            assert!(group_templates.contains("First distinct message"));
-            assert!(group_templates.contains("Second distinct message"));
+            let templates_found: HashSet<String> = groups_map.values().map(|g| g.template_str.clone()).collect();
+            assert!(templates_found.contains("First distinct message"));
+            assert!(templates_found.contains("Second distinct message"));
         });
     }
-
+    
     #[test]
     fn test_numeric_parameter_aggregation() {
-        run_drain_scenario(|worker, drain, probe| {
-            let ts_start = RootTimestamp::new(30);
-            drain.process_line("Request processed in 100 ms".to_string(), ts_start);
-            drain.process_line("Request processed in 250 ms".to_string(), RootTimestamp::new(ts_start.inner + 1));
+        run_drain_scenario(|worker, drain, lg_probe, _assign_probe| {
+            let ts1 = RootTimestamp::new(30);
+            let ts2 = RootTimestamp::new(31);
+            drain.process_line("Request processed in 100 ms".to_string(), ts1.clone());
+            drain.process_line("Request processed in 250 ms".to_string(), ts2.clone());
 
-            let final_ts = RootTimestamp::new(ts_start.inner + 2);
-            drain.flush(final_ts);
-            worker.step_while(|| probe.less_than(&final_ts));
+            let final_ts = RootTimestamp::new(32);
+            drain.flush(final_ts.clone());
+            worker.step_while(|| lg_probe.less_than(&final_ts));
             
-            let mut groups: Vec<LogGroupDD<RootTimestamp>> = Vec::new();
-            probe.with_read(|data| {
-                 for (_batch_ts, data_in_batch) in data.iter() {
-                    for (log_group, _event_ts, diff) in data_in_batch.iter() {
-                         if *diff > 0 { groups.push(log_group.clone()); }
-                    }
-                }
-            });
-            let final_groups: Vec<_> = groups.into_iter().filter(|g| g.last_updated_timestamp == RootTimestamp::new(ts_start.inner + 1)).collect();
-
-            assert_eq!(final_groups.len(), 1);
-            if let Some(group) = final_groups.get(0) {
+            let groups_map = get_final_log_groups_map(lg_probe);
+            assert_eq!(groups_map.len(), 1);
+            if let Some(group) = groups_map.values().next() {
                 assert_eq!(group.count, 2);
                 assert_eq!(group.template_str, "Request processed in <*> ms");
                 let agg_field = group.aggregated_fields.get("param_3"); 
@@ -476,38 +448,31 @@ mod tests {
                 if let Some(FieldAggregation::Sum(s)) = agg_field {
                     assert_eq!(*s, 100 + 250);
                 } else {
-                    panic!("Expected Sum aggregation for numeric param, found {:?}", agg_field);
+                    panic!("Expected Sum aggregation, found {:?}", agg_field);
                 }
             } else {
-                 panic!("No final group found. All groups: {:?}", groups);
+                panic!("No group found for numeric aggregation test.");
             }
         });
     }
     
     #[test]
     fn test_string_parameter_aggregation() {
-        run_drain_scenario(|worker, drain, probe| {
-            let ts_start = RootTimestamp::new(40);
-            drain.process_line("Login failed for user alice".to_string(), ts_start);
-            drain.process_line("Login failed for user bob".to_string(), RootTimestamp::new(ts_start.inner + 1));
-            drain.process_line("Login failed for user alice".to_string(), RootTimestamp::new(ts_start.inner + 2));
+        run_drain_scenario(|worker, drain, lg_probe, _assign_probe| {
+            let ts1 = RootTimestamp::new(40);
+            let ts2 = RootTimestamp::new(41);
+            let ts3 = RootTimestamp::new(42);
+            drain.process_line("Login failed for user alice".to_string(), ts1.clone());
+            drain.process_line("Login failed for user bob".to_string(), ts2.clone());
+            drain.process_line("Login failed for user alice".to_string(), ts3.clone());
 
-            let final_ts = RootTimestamp::new(ts_start.inner + 3);
-            drain.flush(final_ts);
-            worker.step_while(|| probe.less_than(&final_ts));
+            let final_ts = RootTimestamp::new(43);
+            drain.flush(final_ts.clone());
+            worker.step_while(|| lg_probe.less_than(&final_ts));
 
-            let mut groups: Vec<LogGroupDD<RootTimestamp>> = Vec::new();
-            probe.with_read(|data| {
-                for (_batch_ts, data_in_batch) in data.iter() {
-                    for (log_group, _event_ts, diff) in data_in_batch.iter() {
-                         if *diff > 0 { groups.push(log_group.clone()); }
-                    }
-                }
-            });
-            let final_groups: Vec<_> = groups.into_iter().filter(|g| g.last_updated_timestamp == RootTimestamp::new(ts_start.inner + 2)).collect();
-            
-            assert_eq!(final_groups.len(), 1);
-            if let Some(group) = final_groups.get(0) {
+            let groups_map = get_final_log_groups_map(lg_probe);
+            assert_eq!(groups_map.len(), 1);
+            if let Some(group) = groups_map.values().next() {
                 assert_eq!(group.count, 3);
                 assert_eq!(group.template_str, "Login failed for user <*>");
                 let agg_field = group.aggregated_fields.get("param_4");
@@ -521,70 +486,54 @@ mod tests {
                     panic!("Expected DistinctValues aggregation, found {:?}", agg_field);
                 }
             } else {
-                 panic!("No final group found. All groups: {:?}", groups);
+                 panic!("No group found for string aggregation test.");
             }
         });
     }
 
     #[test]
     fn test_basic_rate_calculation() {
-        run_drain_scenario(|worker, drain, probe| {
+        run_drain_scenario(|worker, drain, lg_probe, _assign_probe| {
             let ts_start = RootTimestamp::new(50);
-            drain.process_line("Rate test message".to_string(), ts_start);
+            drain.process_line("Rate test message".to_string(), ts_start.clone());
             drain.process_line("Rate test message".to_string(), RootTimestamp::new(ts_start.inner + 1));
             drain.process_line("Rate test message".to_string(), RootTimestamp::new(ts_start.inner + 2));
 
             let final_ts = RootTimestamp::new(ts_start.inner + 3);
-            drain.flush(final_ts);
-            worker.step_while(|| probe.less_than(&final_ts));
-
-            let mut groups: Vec<LogGroupDD<RootTimestamp>> = Vec::new();
-            probe.with_read(|data| {
-                 for (_batch_ts, data_in_batch) in data.iter() {
-                    for (log_group, _event_ts, diff) in data_in_batch.iter() {
-                         if *diff > 0 { groups.push(log_group.clone()); }
-                    }
-                }
-            });
-            let final_groups: Vec<_> = groups.into_iter().filter(|g| g.last_updated_timestamp == RootTimestamp::new(ts_start.inner + 2)).collect();
+            drain.flush(final_ts.clone());
+            worker.step_while(|| lg_probe.less_than(&final_ts));
             
-            assert_eq!(final_groups.len(), 1);
-            if let Some(group) = final_groups.get(0) {
+            let groups_map = get_final_log_groups_map(lg_probe);
+            assert_eq!(groups_map.len(), 1);
+            if let Some(group) = groups_map.values().next() {
                 assert_eq!(group.count, 3);
                 let expected_duration = (RootTimestamp::new(ts_start.inner + 2).inner - ts_start.inner) as f64;
-                let expected_rate = 3.0 / expected_duration;
+                let expected_rate = 3.0 / expected_duration; // 3 events / 2 "seconds"
                 assert!((group.rate - expected_rate).abs() < 0.001, "Rate calculation is incorrect. Expected {}, got {}. Duration: {}", expected_rate, group.rate, expected_duration);
             } else {
-                 panic!("No final group found. All groups: {:?}", groups);
+                 panic!("No group found for rate calculation test.");
             }
         });
     }
+
      #[test]
     fn test_rate_calc_single_event() {
-        run_drain_scenario(|worker, drain, probe| {
+        run_drain_scenario(|worker, drain, lg_probe, _assign_probe| {
             let ts = RootTimestamp::new(60);
-            drain.process_line("Single event rate test".to_string(), ts);
+            drain.process_line("Single event rate test".to_string(), ts.clone());
 
             let final_ts = RootTimestamp::new(ts.inner + 1);
-            drain.flush(final_ts);
-            worker.step_while(|| probe.less_than(&final_ts));
+            drain.flush(final_ts.clone());
+            worker.step_while(|| lg_probe.less_than(&final_ts));
 
-            let mut groups: Vec<LogGroupDD<RootTimestamp>> = Vec::new();
-            probe.with_read(|data| {
-                 for (_batch_ts, data_in_batch) in data.iter() {
-                    for (log_group, _event_ts, diff) in data_in_batch.iter() {
-                         if *diff > 0 { groups.push(log_group.clone()); }
-                    }
-                }
-            });
-             let final_groups: Vec<_> = groups.into_iter().filter(|g| g.last_updated_timestamp == ts).collect();
-
-            assert_eq!(final_groups.len(), 1);
-            if let Some(group) = final_groups.get(0) {
+            let groups_map = get_final_log_groups_map(lg_probe);
+            assert_eq!(groups_map.len(), 1);
+            if let Some(group) = groups_map.values().next() {
                 assert_eq!(group.count, 1);
+                // Duration is 1.0 if first_seen == last_updated
                 assert!((group.rate - 1.0).abs() < 0.001, "Rate for single event incorrect. Expected 1.0, got {}", group.rate);
             } else {
-                 panic!("No final group found. All groups: {:?}", groups);
+                 panic!("No group found for single event rate test.");
             }
         });
     }

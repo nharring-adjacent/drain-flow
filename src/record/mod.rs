@@ -14,7 +14,9 @@ extern crate derive_more;
 use std::fmt;
 
 use lazy_static::lazy_static;
-use rksuid::Ksuid;
+// Removed rkyv imports
+use serde::{Serialize, Deserialize}; // Added serde imports
+use uuid::Uuid; 
 use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 
@@ -24,17 +26,21 @@ use crate::drains::simple::INTERNER;
 lazy_static! {
     static ref ASTERISK: DefaultSymbol = INTERNER.write().get_or_intern_static("*");
 }
-#[derive(Clone, Debug)]
+
+// Ksuid surrogate module (ksuid_rkyv_adapter) removed.
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+// Removed rkyv derives and attributes
 pub struct Record {
     pub(crate) inner: TokenStream,
-    pub uid: Ksuid,
+    pub uid: Uuid, // Uuid with serde feature should work directly
 }
 impl Record {
     #[instrument(name = "Create new record", level = "trace", skip(line))]
     pub fn new(line: String) -> Self {
         Self {
             inner: TokenStream::from_unicode_line(&line),
-            uid: Ksuid::new(),
+            uid: Uuid::new_v4(), // Changed from Ksuid::new()
         }
     }
 

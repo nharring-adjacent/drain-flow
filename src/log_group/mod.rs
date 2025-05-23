@@ -11,15 +11,16 @@
 use std::{borrow::Borrow, collections::HashMap, fmt};
 
 use anyhow::Error;
-use chrono::{DateTime, Utc};
-use rksuid::Ksuid;
+use chrono::{DateTime, Utc}; // Keep for now, might be unused after Ksuid removal from LogGroup
+use uuid::Uuid; // Added Uuid
+// Removed: use rksuid::Ksuid;
 use tracing::{debug, instrument};
 
 use crate::record::{tokens::Token, Record};
 
 #[derive(Clone, Debug)]
 pub struct LogGroup {
-    pub id: Ksuid,
+    pub id: Uuid, // Changed from Ksuid to Uuid
     event: Record,
     examples: Vec<Record>,
     pub variables: HashMap<usize, Token>,
@@ -114,26 +115,24 @@ impl LogGroup {
         self.examples.iter().collect::<Vec<&Record>>()
     }
 
-    /// Returns the [Ksuid] associated with the [LogGroup], usually identical to the [Record] which created the group
+    /// Returns the [Uuid] associated with the [LogGroup], usually identical to the [Record] which created the group
     #[instrument(level = "trace", skip_all)]
-    pub fn get_id(&self) -> Ksuid {
+    pub fn get_id(&self) -> Uuid { // Changed return type to Uuid
         self.id
     }
 
-    /// Returns the [DateTime] of the creation of the base event in the [LogGroup]
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_time(&self) -> DateTime<Utc> {
-        self.event.uid.get_time()
-    }
+    // Removed get_time(&self) -> DateTime<Utc> as Uuid does not store timestamp info directly.
+    // If LogGroup creation time is needed, it should be stored explicitly.
 }
 
 impl fmt::Display for LogGroup {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Adjusted format string to remove "First Seen" which relied on Ksuid's timestamp.
+        // Using self.id (which is Uuid) for display.
         write!(
             f,
-            "LogGroup ID: {}\nFirst Seen: {}\nEvent: {}\n{} examples and {} wildcards\n",
-            self.event.uid.serialize(),
-            self.event.uid.get_time(),
+            "LogGroup ID: {}\nEvent: {}\n{} examples and {} wildcards\n",
+            self.id.to_string(), // Uuid displayed as string
             self.event,
             self.examples.len(),
             self.variables.len()

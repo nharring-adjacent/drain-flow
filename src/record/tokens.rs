@@ -11,6 +11,8 @@
 use std::{collections::HashMap, fmt::{self, Display}};
 
 use itertools::Itertools;
+// Removed rkyv imports
+use serde::{Serialize, Deserialize}; // Added serde imports
 use joinery::JoinableIterator;
 use lazy_static::lazy_static;
 use regex::RegexSet;
@@ -36,7 +38,8 @@ fn symbolize_grokker() -> HashMap<Grokker, DefaultSymbol> {
 }
 
 custom_derive! {
-    #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, IterVariants(GrokkerVariants), EnumDisplay)]
+    #[derive(Serialize, Deserialize, Clone, Copy, Debug, Hash, PartialEq, Eq, IterVariants(GrokkerVariants), EnumDisplay)]
+    // Removed rkyv derives and attributes
     pub enum Grokker {
         Base10Integer,
         Base10Float,
@@ -138,7 +141,8 @@ impl GrokSet {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+// Removed rkyv derives and attributes
 pub enum Token {
     /// Token that matches any other token
     Wildcard,
@@ -275,10 +279,11 @@ impl From<Token> for DefaultSymbol {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+// Removed rkyv derives and attributes
 pub enum TypedToken {
     /// Token containing a string with at least 1 non-digit
-    String(DefaultSymbol),
+    String(DefaultSymbol), // DefaultSymbol needs serde support from string-interner
     /// Token containing a whole number only
     Int(i64),
     /// Token containing a float
@@ -293,7 +298,8 @@ impl TypedToken {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
+// Removed rkyv derives and attributes
 pub struct Offset {
     start: usize,
     end: usize,
@@ -306,7 +312,8 @@ impl Display for Offset {
 }
 
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+// Removed rkyv derives and attributes
 pub struct TokenStream {
     pub(crate) inner: Vec<(Offset, Token)>,
 }
