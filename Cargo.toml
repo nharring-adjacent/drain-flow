@@ -44,3 +44,7 @@ harness = false
 [[bench]]
 name = "sink_benchmark"
 harness = false
+
+[[bench]]
+name = "drain_benchmarks"
+harness = false

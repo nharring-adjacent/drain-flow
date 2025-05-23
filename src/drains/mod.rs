@@ -9,3 +9,7 @@
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
 pub mod simple;
+pub mod differential;
+
+pub use simple::SingleLayer as SimpleDrain; // Alias for clarity if needed elsewhere
+pub use differential::DifferentialDrain;
