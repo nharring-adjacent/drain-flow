@@ -22,19 +22,19 @@ use tracing::instrument;
 use crate::{log_group::LogGroup, record::Record};
 
 lazy_static! {
-    pub(crate) static ref INTERNER: Arc<RwLock<StringInterner>> =
+    pub(crate) static ref INTERNER: Arc<RwLock<StringInterner<B>>> =
         Arc::new(RwLock::new(StringInterner::default()));
 }
 #[derive(Debug, Clone)]
-pub struct SingleLayer {
+pub struct SingleLayer<B: string_interner::backend::Backend> {
     pub domain: Vec<Regex>,
     // NumTokens -> First Token -> List of Log groups
     base_layer: HashMap<usize, HashMap<DefaultSymbol, Vec<LogGroup>>>,
     pub threshold: Ratio<BigInt>,
-    strings: Arc<RwLock<StringInterner>>,
+    strings: Arc<RwLock<StringInterner<B>>>,
 }
 
-impl SingleLayer {
+impl<B: string_interner::backend::Backend> SingleLayer<B> {
     #[instrument(skip(domain))]
     pub fn new(domain: Vec<String>) -> Result<Self, Error> {
         let patterns = domain
@@ -142,7 +142,7 @@ impl SingleLayer {
     }
 }
 
-impl fmt::Display for SingleLayer {
+impl<B: string_interner::backend::Backend> fmt::Display for SingleLayer<B> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let base = format!(
             "SimpleDrain\nDomain Patterns: {:?}\nSimilarity Threshold: {}\n",
