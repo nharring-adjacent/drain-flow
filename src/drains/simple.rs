@@ -22,19 +22,19 @@ use tracing::instrument;
 use crate::{log_group::LogGroup, record::Record};
 
 lazy_static! {
-    pub(crate) static ref INTERNER: Arc<RwLock<StringInterner<B>>> =
-        Arc::new(RwLock::new(StringInterner::default()));
+    pub(crate) static ref INTERNER: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>> =
+        Arc::new(RwLock::new(StringInterner::<string_interner::backend::BucketBackend>::new()));
 }
 #[derive(Debug, Clone)]
-pub struct SingleLayer<B: string_interner::backend::Backend> {
+pub struct SingleLayer {
     pub domain: Vec<Regex>,
     // NumTokens -> First Token -> List of Log groups
     base_layer: HashMap<usize, HashMap<DefaultSymbol, Vec<LogGroup>>>,
     pub threshold: Ratio<BigInt>,
-    strings: Arc<RwLock<StringInterner<B>>>,
+    strings: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>>,
 }
 
-impl<B: string_interner::backend::Backend> SingleLayer<B> {
+impl SingleLayer {
     #[instrument(skip(domain))]
     pub fn new(domain: Vec<String>) -> Result<Self, Error> {
         let patterns = domain
@@ -142,7 +142,7 @@ impl<B: string_interner::backend::Backend> SingleLayer<B> {
     }
 }
 
-impl<B: string_interner::backend::Backend> fmt::Display for SingleLayer<B> {
+impl fmt::Display for SingleLayer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let base = format!(
             "SimpleDrain\nDomain Patterns: {:?}\nSimilarity Threshold: {}\n",
@@ -165,7 +165,7 @@ mod should {
     use spectral::prelude::*;
     use tracing_test::traced_test;
 
-    use crate::drains::simple::SingleLayer;
+    use crate::drains::simple::{SingleLayer}; // Removed <BucketBackend> for now, will add if compiler complains
 
     #[traced_test]
     #[test]

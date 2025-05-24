@@ -27,7 +27,7 @@ tracing = "0.1.36"
 
 [dev-dependencies]
 chrono = "0.4"
-criterion = {version = "0.6", features = ["html_reports"]}
+criterion = {version = "0.5.1", features = ["html_reports"]}
 proptest = "1.0.0"
 rand = "0.9.0"
 serde = "1.0.144"
