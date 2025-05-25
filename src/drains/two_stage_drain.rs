@@ -20,15 +20,14 @@ use string_interner::{DefaultSymbol, StringInterner};
 
 use crate::log_group::LogGroup;
 use crate::record::Record;
-use crate::record::tokens::ASTERISK;
+// Removed: use crate::record::tokens::ASTERISK;
 
-// Using the same INTERNER as simple.rs for now.
-// This might need to be re-evaluated if TwoStageDrain has different string interning needs.
+// Use the shared interner from simple.rs
+use crate::drains::simple; 
+
 lazy_static! {
-    pub(crate) static ref INTERNER: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>> =
-        Arc::new(RwLock::new(StringInterner::<
-            string_interner::backend::BucketBackend,
-        >::new()));
+    static ref DRAIN_ASTERISK: DefaultSymbol =
+        simple::INTERNER.write().get_or_intern_static("<*>");
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +49,8 @@ impl Node {
             kind: NodeKind::Internal(HashMap::new()),
         }
     }
+
+    // Removed collect_all_groups_in_subtree from impl Node
 
     pub fn new_leaf_node() -> Self {
         Node {
@@ -136,6 +137,28 @@ mod tests {
     }
 }
 
+// Define collect_all_groups_in_subtree_free as a free function
+fn collect_all_groups_in_subtree_free(
+    node: &Node,
+    path_to_node: Vec<DefaultSymbol>,
+    candidate_paths: &mut Vec<(Vec<DefaultSymbol>, Uuid)>,
+) {
+    match &node.kind {
+        NodeKind::Leaf(log_groups) => {
+            for lg in log_groups {
+                candidate_paths.push((path_to_node.clone(), lg.id));
+            }
+        }
+        NodeKind::Internal(children_map) => {
+            for (token, child_node) in children_map.iter() {
+                let mut path_to_child = path_to_node.clone();
+                path_to_child.push(*token);
+                collect_all_groups_in_subtree_free(child_node, path_to_child, candidate_paths);
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TwoStageDrain {
     pub domain: Vec<Regex>,
@@ -148,20 +171,21 @@ pub struct TwoStageDrain {
 }
 
 impl TwoStageDrain {
-    // Added lifetime 'a to the method itself, not the impl block,
-    // to tie current_node's lifetime to candidate_groups.
-    fn find_candidate_log_groups<'a>(
-        &self, // Takes &self because it only reads the tree structure initially
-        current_node: &'a Node, // The node to search from, with lifetime 'a
+    fn find_candidate_log_groups(
+        &self,
+        current_node: &Node,
         record_tokens: &[DefaultSymbol],
+        current_path: Vec<DefaultSymbol>, // Path from root of this length-tree to current_node
         current_depth: usize,
-        max_depth: usize, // Pass max_depth
-        candidate_groups: &mut Vec<&'a LogGroup>, // Collects references with lifetime 'a
+        max_depth: usize,
+        candidate_paths: &mut Vec<(Vec<DefaultSymbol>, Uuid)>, // path_to_leaf, log_group_id
     ) {
-        if current_depth >= max_depth { // Base case: if we're at or beyond max_depth, this node should be a leaf
+        // Base case: if we're at or beyond max_depth, this node should be a leaf
+        // or treated as such for candidate collection.
+        if current_depth >= max_depth {
             if let NodeKind::Leaf(log_groups) = &current_node.kind {
                 for lg in log_groups {
-                    candidate_groups.push(lg);
+                    candidate_paths.push((current_path.clone(), lg.id));
                 }
             }
             return;
@@ -171,38 +195,99 @@ impl TwoStageDrain {
             NodeKind::Leaf(log_groups) => {
                 // If we encounter a leaf node before reaching max_depth, add its groups
                 for lg in log_groups {
-                    candidate_groups.push(lg);
+                    candidate_paths.push((current_path.clone(), lg.id));
                 }
             }
             NodeKind::Internal(children_map) => {
-                // Path 1: Match specific token
-                if let Some(token_for_this_depth) = record_tokens.get(current_depth) {
-                    if let Some(child_node) = children_map.get(token_for_this_depth) {
+                let mut specific_token_path_followed = false;
+                let mut wildcard_path_followed = false;
+                let next_log_token_opt = record_tokens.get(current_depth);
+
+                // Path 1: Attempt to follow specific token from the log message
+                if let Some(token_val) = next_log_token_opt {
+                    if let Some(child_node) = children_map.get(token_val) {
+                        let mut next_path = current_path.clone();
+                        next_path.push(*token_val);
                         self.find_candidate_log_groups(
                             child_node,
                             record_tokens,
+                            next_path,
                             current_depth + 1,
                             max_depth,
-                            candidate_groups,
+                            candidate_paths,
                         );
+                        specific_token_path_followed = true;
                     }
                 }
 
-                // Path 2: Match wildcard token <*>
-                if let Some(wildcard_child_node) = children_map.get(&ASTERISK) {
-                    self.find_candidate_log_groups(
-                        wildcard_child_node,
-                        record_tokens,
-                        current_depth + 1,
-                        max_depth,
-                        candidate_groups,
-                    );
+                // Path 2: Attempt to follow wildcard token <*> in the tree,
+                // but only if it's different from the specific token path (or if specific token is not a wildcard)
+                // This check avoids double-counting if record_tokens[current_depth] is already DRAIN_ASTERISK
+                let specific_token_is_wildcard = next_log_token_opt.map_or(false, |t| *t == *DRAIN_ASTERISK);
+                if !specific_token_is_wildcard { // only try wildcard if specific token wasn't already the wildcard
+                    if let Some(wildcard_child_node) = children_map.get(&*DRAIN_ASTERISK) {
+                        let mut next_path_wildcard = current_path.clone();
+                        next_path_wildcard.push(*DRAIN_ASTERISK);
+                        self.find_candidate_log_groups(
+                            wildcard_child_node,
+                            record_tokens,
+                            next_path_wildcard,
+                            current_depth + 1,
+                            max_depth,
+                            candidate_paths,
+                        );
+                        wildcard_path_followed = true; // Mark that a wildcard path was taken
+                    }
+                } else {
+                    // If specific token was already a wildcard, and we followed it,
+                    // then specific_token_path_followed is true. We consider wildcard path as "followed".
+                    if specific_token_path_followed {
+                        wildcard_path_followed = true;
+                    }
+                }
+
+
+                // Condition for collecting all subtree groups (DRAIN paper Step 2 adjustment)
+                // If traversal for the current log's token sequence stops at this internal node
+                // (i.e., neither the specific next token nor a wildcard led further down this path for *this sequence*)
+                // then collect all groups under this node.
+                // This implies next_log_token_opt.is_some() because we are at an Internal node and not at max_depth.
+                if current_depth < max_depth && next_log_token_opt.is_some() && !specific_token_path_followed && !wildcard_path_followed {
+                    // No direct path continuation for the current log sequence. Collect all children.
+                    for (token, child_node) in children_map.iter() {
+                        let mut path_to_child = current_path.clone();
+                        path_to_child.push(*token);
+                        // Call the free function
+                        collect_all_groups_in_subtree_free(child_node, path_to_child, candidate_paths);
+                    }
                 }
             }
         }
     }
+
+    // Helper to find a log group by ID starting from a given node (immutable search)
+    fn find_log_group_in_node_by_id<'a>(node: &'a Node, group_id: Uuid) -> Option<&'a LogGroup> {
+        match &node.kind {
+            NodeKind::Leaf(log_groups) => {
+                for lg in log_groups {
+                    if lg.id == group_id {
+                        return Some(lg);
+                    }
+                }
+                None
+            }
+            NodeKind::Internal(children_map) => {
+                for child_node in children_map.values() {
+                    if let Some(lg) = Self::find_log_group_in_node_by_id(child_node, group_id) {
+                        return Some(lg);
+                    }
+                }
+                None
+            }
+        }
+    }
     
-    fn collect_log_groups_from_node( // Removed &self
+    fn collect_log_groups_from_node(
         node: &mut Node,
         all_log_groups: &mut Vec<LogGroup>,
     ) {
@@ -251,109 +336,116 @@ impl TwoStageDrain {
     // The E0499 error is more complex and might require a different strategy if it persists.
 
     fn get_or_create_log_group_mut<'a>(
-        // &mut self, // No longer takes &mut self
         current_node: &'a mut Node,
-        record_tokens: &[DefaultSymbol], // Path to traverse/create
+        record_tokens: &[DefaultSymbol],
         current_depth: usize,
         max_depth: usize,
         max_children: usize,
     ) -> &'a mut Vec<LogGroup> {
-        // Case 1: We've reached the target depth for the given record_tokens path
-        if current_depth == record_tokens.len() {
-            // Ensure it's a leaf node. If not, it becomes an empty leaf.
-            // This is a simplification; DRAIN paper (Sec 3.2, Step 3 & Fig 3) suggests new leaf nodes are added.
-            // If it's an internal node with existing children, this conversion is lossy for those children.
-            // This part needs careful consideration against DRAIN's exact specification for adding groups
-            // when a path that was previously a prefix now becomes a cluster location.
-            // The current `find_candidate_log_groups` should ideally return paths that end at existing leaves
-            // or at points where new leaves should be created.
-            if let NodeKind::Internal(children) = &current_node.kind {
-                 if children.is_empty() { // Safe to convert if no actual children exist
-                    current_node.kind = NodeKind::Leaf(Vec::new());
-                } else {
-                    // Path ends, but it's an internal node with children. This is a conflict.
-                    // DRAIN implies a log group can't exist *at* an internal node.
-                    // A robust solution would involve creating a special child (e.g., under an <END> token)
-                    // to hold the log groups for this exact path if this node must remain internal.
-                    // For now, to satisfy returning a &mut Vec<LogGroup> from *this* node,
-                    // we'd have to convert it, potentially orphaning children.
-                    // This indicates that the path provided to this function might sometimes need
-                    // to be extended by one more (special) token to correctly get/create a leaf.
-                    // However, the prompt's logic forces it to become a leaf.
-                    // This might be acceptable if `find_candidate_log_groups` ensures this path leads to a "true" leaf.
-                    // If a candidate path from `find_candidate_log_groups` points here, it expects a group here.
-                    // For simplicity as per prompt, convert to Leaf.
-                    // Consider this a point for future refinement based on DRAIN paper details.
-                    current_node.kind = NodeKind::Leaf(Vec::new()); // Simplification: becomes an empty leaf
-                }
-            } else if !matches!(current_node.kind, NodeKind::Leaf(_)) {
-                 // If it's neither Internal nor Leaf (impossible), or to ensure it is Leaf.
-                 *current_node = Node::new_leaf_node();
-            }
 
+        // Case 1: Path is exhausted. Node must be a Leaf.
+        if current_depth == record_tokens.len() {
+            if !matches!(&current_node.kind, NodeKind::Leaf(_)) {
+                // If it's Internal, or any other unexpected kind, convert to Leaf.
+                // Orphaned children if it was Internal with children (simplified DRAIN logic).
+                current_node.kind = NodeKind::Leaf(Vec::new());
+            }
+            // Now it's guaranteed to be a Leaf or made into one.
             match &mut current_node.kind {
                 NodeKind::Leaf(log_groups) => return log_groups,
-                _ => unreachable!(), // Should be a Leaf now
+                _ => unreachable!("Node ensured to be Leaf for exhausted path."),
             }
         }
 
-        // Case 2: Max depth reached. Node must be a leaf.
+        // Case 2: Max depth reached. Node must become a Leaf.
         if current_depth + 1 >= max_depth {
-            if let NodeKind::Internal(ref mut children_map_taken) = current_node.kind {
-                let mut collected_groups = Vec::new();
-                let mut temp_children_map = std::mem::take(children_map_taken);
-                for child_node in temp_children_map.values_mut() {
-                    // collect_log_groups_from_node doesn't take &self anymore
-                    Self::collect_log_groups_from_node(child_node, &mut collected_groups);
-                }
-                *current_node = Node::new_leaf_node_with_groups(collected_groups);
-            }
-            // Ensure it is a Leaf.
-            if !matches!(current_node.kind, NodeKind::Leaf(_)) {
-                 *current_node = Node::new_leaf_node(); // Should not happen if logic above is correct
-            }
-            match &mut current_node.kind {
-                NodeKind::Leaf(ref mut log_groups) => return log_groups,
-                _ => unreachable!("Should be a Leaf node at max_depth"),
-            }
-        }
-
-        // Case 3: Not at max depth, and path is not exhausted. Traverse/create internal nodes.
-        if let NodeKind::Leaf(ref mut log_groups) = &mut current_node.kind {
-            let mut new_children_map = HashMap::new();
-            if !log_groups.is_empty() {
-                let old_groups = std::mem::take(log_groups);
-                new_children_map.insert(*ASTERISK, Node::new_leaf_node_with_groups(old_groups));
-            }
-            current_node.kind = NodeKind::Internal(new_children_map);
-        }
-
-        match &mut current_node.kind {
-            NodeKind::Internal(children_map) => {
-                let token_for_this_depth = record_tokens[current_depth];
-
-                if children_map.len() >= max_children && !children_map.contains_key(&token_for_this_depth) {
+            let final_groups_for_leaf = match std::mem::replace(&mut current_node.kind, NodeKind::Leaf(Vec::new())) {
+                NodeKind::Internal(mut children_map_taken) => {
                     let mut collected_groups = Vec::new();
-                    let mut old_children_map = std::mem::take(children_map);
-                    for child_node in old_children_map.values_mut() {
+                    for child_node in children_map_taken.values_mut() {
                         Self::collect_log_groups_from_node(child_node, &mut collected_groups);
                     }
-                    *current_node = Node::new_leaf_node_with_groups(collected_groups);
-                    match &mut current_node.kind {
-                        NodeKind::Leaf(ref mut log_groups) => return log_groups,
-                        _ => unreachable!("Converted to Leaf due to max_children"),
-                    }
-                } else {
-                    let child_node = children_map
-                        .entry(token_for_this_depth)
-                        .or_insert_with(Node::new_internal_node);
-                    return Self::get_or_create_log_group_mut(child_node, record_tokens, current_depth + 1, max_depth, max_children);
+                    collected_groups
                 }
-            }
-            NodeKind::Leaf(_) => {
-                unreachable!("Node should have been converted to Internal if not at max_depth and path not exhausted");
+                NodeKind::Leaf(existing_groups) => existing_groups,
+                // No other kinds expected if Node is always constructed as Internal or Leaf.
+            };
+            current_node.kind = NodeKind::Leaf(final_groups_for_leaf);
+            
+            match &mut current_node.kind {
+                NodeKind::Leaf(log_groups) => return log_groups,
+                _ => unreachable!("Node converted to Leaf at max_depth."),
             }
         }
+
+        // Case 3: Traverse/Create. Node kind might change. Loop to handle state transitions.
+        // Temporary enum to hold action determined by initial inspection.
+        enum DeterminedAction {
+            Recurse, // Node is Internal and will remain Internal for recursion.
+            TransformToLeaf(Vec<LogGroup>),
+            TransformToInternal(HashMap<DefaultSymbol, Node>),
+        }
+
+        'transform_loop: loop {
+            let action: DeterminedAction;
+
+            // Phase 1: Decide action. This match takes a mutable borrow of current_node.kind.
+            // If data is taken (e.g. via std::mem::take), that part of the borrow ends.
+            match &mut current_node.kind {
+                NodeKind::Internal(children_map) => {
+                    let token_for_this_depth = record_tokens[current_depth];
+                    if children_map.len() >= max_children && !children_map.contains_key(&token_for_this_depth) {
+                        // Condition: Internal node is full and current token is not a child. Convert to Leaf.
+                        let mut taken_map = std::mem::take(children_map); // children_map is now empty.
+                        let mut collected_groups = Vec::new();
+                        for (_symbol, node_in_map) in taken_map.iter_mut() { // Iterate over the owned map
+                            Self::collect_log_groups_from_node(node_in_map, &mut collected_groups);
+                        }
+                        action = DeterminedAction::TransformToLeaf(collected_groups);
+                    } else {
+                        // Decision is to recurse. No data taken yet.
+                        action = DeterminedAction::Recurse;
+                    }
+                }
+                NodeKind::Leaf(log_groups_vec) => {
+                    // Node is Leaf, but path is not exhausted (Case 1 handled this). Convert Leaf to Internal.
+                    let taken_groups = std::mem::take(log_groups_vec); // log_groups_vec is now empty.
+                    let mut new_children_map = HashMap::new();
+                    if !taken_groups.is_empty() {
+                        new_children_map.insert(*DRAIN_ASTERISK, Node::new_leaf_node_with_groups(taken_groups));
+                    }
+                    action = DeterminedAction::TransformToInternal(new_children_map);
+                }
+            } // Mutable borrow of current_node.kind by the match ends here.
+
+            // Phase 2: Execute action.
+            match action {
+                DeterminedAction::TransformToLeaf(groups) => {
+                    current_node.kind = NodeKind::Leaf(groups);
+                    // Loop again to re-evaluate current_node (now Leaf) against Case 1 or 2, or if path still not exhausted.
+                    continue 'transform_loop;
+                }
+                DeterminedAction::TransformToInternal(map) => {
+                    current_node.kind = NodeKind::Internal(map);
+                    // Loop again to re-evaluate current_node (now Internal).
+                    // Next iteration's Phase 1 will likely take the Recurse path.
+                    continue 'transform_loop;
+                }
+                DeterminedAction::Recurse => {
+                    // Re-borrow current_node.kind as Internal to get child for recursion.
+                    // This is a new, distinct borrow.
+                    if let NodeKind::Internal(children_map) = &mut current_node.kind {
+                        let token_for_this_depth = record_tokens[current_depth];
+                        let child_node = children_map.entry(token_for_this_depth).or_insert_with(Node::new_internal_node);
+                        return Self::get_or_create_log_group_mut(child_node, record_tokens, current_depth + 1, max_depth, max_children);
+                    } else {
+                        // This state should ideally not be reached if 'Recurse' was determined when it was Internal.
+                        // Implies current_node.kind changed unexpectedly or logic error.
+                        unreachable!("Node kind was expected to be Internal for recursion.");
+                    }
+                }
+            }
+        } // end 'transform_loop
     }
 
     pub fn new(
@@ -374,7 +466,7 @@ impl TwoStageDrain {
             domain: domain_patterns,
             tree: HashMap::new(),
             threshold: threshold_ratio,
-            strings: INTERNER.clone(),
+            strings: simple::INTERNER.clone(), // Use shared interner
             max_depth,
             max_children,
             line_count_processed: 0, // Initialize new field
@@ -382,16 +474,17 @@ impl TwoStageDrain {
     }
 
     pub fn process_line(&mut self, line: String) -> Result<bool, Error> {
-        let local_max_depth = self.max_depth;
-        let local_max_children = self.max_children;
-        let local_threshold = self.threshold.clone(); // Fixed E0507 by cloning
+        let local_max_depth = self.max_depth; 
+        let local_max_children = self.max_children; 
+        let local_threshold = self.threshold.clone();
+        let local_domain = self.domain.clone();
 
         if line.is_empty() {
             return Ok(false);
         }
 
         let mut processed_line = line;
-        for re in &self.domain {
+        for re in &local_domain {
             processed_line = re.replace_all(&processed_line, "<*>").into_owned();
         }
 
@@ -399,91 +492,88 @@ impl TwoStageDrain {
             return Ok(false);
         }
         
-        let new_record = Record::new(processed_line.clone()); // Clone processed_line for Record
+        let new_record = Record::new(processed_line.clone()); 
 
         let processed_line_tokens: Vec<DefaultSymbol> = {
-            let mut interner = INTERNER.write();
+            let mut interner = self.strings.write(); // Use self.strings (shared interner)
             processed_line
                 .split_ascii_whitespace()
                 .map(|s| interner.get_or_intern(s))
                 .collect()
-        }; // Lock released here
+        };
 
         if processed_line_tokens.is_empty() {
-            return Ok(false); // Or handle as an error/empty line
+            return Ok(false);
         }
         
-        self.line_count_processed += 1; // Increment after tokenization is confirmed non-empty
-
+        self.line_count_processed += 1;
         let length = processed_line_tokens.len();
 
-        // Get the root node for this length.
-        let root_node_for_length = self.tree.get(&length); // Immutable borrow for find_candidate_log_groups
+        // Immutable Phase: Find candidate log groups and best match
+        let mut best_match_info: Option<(Vec<DefaultSymbol>, Uuid, u64)> = None; // path, id, score
 
-        if let Some(root_node) = root_node_for_length {
-            let mut candidate_groups: Vec<&LogGroup> = Vec::new();
+        if let Some(root_node) = self.tree.get(&length) {
+            let mut candidate_infos: Vec<(Vec<DefaultSymbol>, Uuid)> = Vec::new();
+            // find_candidate_log_groups populates candidate_infos
             self.find_candidate_log_groups(
                 root_node,
                 &processed_line_tokens,
-                0,
-                local_max_depth, // Use the local variable
-                &mut candidate_groups,
+                Vec::new(), // Initial empty path for the root of this length-specific tree
+                0,          // Initial depth
+                local_max_depth,
+                &mut candidate_infos,
             );
-            
-            // TODO: Perform similarity search on candidate_groups.
-            // If match found:
-            //   Need to get the *mutable* LogGroup. This is the tricky part.
-            //   Perhaps find_candidate_log_groups returns Vec<Uuid> of log groups,
-            //   then we iterate, find best Uuid, then get_mut_log_group_by_id(uuid) to modify.
-            //   For now, let's put a placeholder here.
-            // if !candidate_groups.is_empty() { /* ... perform matching ... */ }
-        } else {
-            // No root node for this length, so definitely a new group.
-            // This case will be handled when integrating the mutable part.
+
+            for (path, group_id) in candidate_infos { // candidate_infos contains (path_to_leaf, log_group_id)
+                // find_log_group_in_node_by_id needs to search from the same root_node
+                if let Some(lg) = Self::find_log_group_in_node_by_id(root_node, group_id) {
+                    let current_score = new_record.calc_sim_score(lg.event());
+                    if best_match_info.is_none() || current_score > best_match_info.as_ref().unwrap().2 {
+                        best_match_info = Some((path, group_id, current_score));
+                    }
+                }
+            }
         }
 
-        // Comment out the existing call to Self::get_or_create_log_group_mut(...) and subsequent logic.
-        /*
+        // Mutable Phase: Update existing group or create a new one
         let root_node_for_length_mut = self.tree.entry(length).or_insert_with(Node::new_internal_node);
-        let log_groups_vec = Self::get_or_create_log_group_mut(
+
+        if let Some((best_path_to_leaf, best_group_id, best_score)) = best_match_info {
+            let score_ratio = if length > 0 {
+                Ratio::<BigInt>::new(BigInt::from(best_score), BigInt::from(length))
+            } else {
+                Ratio::<BigInt>::new(BigInt::from(0), BigInt::from(1)) // Score 0 if length is 0
+            };
+
+            if score_ratio > local_threshold {
+                // Use best_path_to_leaf to get to the Vec<LogGroup>
+                let target_log_groups_vec = Self::get_or_create_log_group_mut(
+                    root_node_for_length_mut,
+                    &best_path_to_leaf, 
+                    0, // Start depth from 0 for get_or_create_log_group_mut
+                    local_max_depth,
+                    local_max_children,
+                );
+
+                if let Some(found_group) = target_log_groups_vec.iter_mut().find(|g| g.id == best_group_id) {
+                    found_group.add_example(new_record.clone()); // Clone new_record for this case
+                    return Ok(false); // Matched existing group
+                }
+                // If the group with best_group_id is not found, it implies an inconsistency
+                // between find_candidate_log_groups/find_log_group_in_node_by_id and get_or_create_log_group_mut.
+                // Fall through to create a new group, though this indicates a potential issue.
+            }
+        }
+        
+        // Create new group: No candidates, no root_node for length, or best match below threshold, or inconsistent state.
+        let log_groups_vec_for_new = Self::get_or_create_log_group_mut(
             root_node_for_length_mut,
-            &processed_line_tokens,
-            0,
+            &processed_line_tokens, // Path for the new group is simply its own tokens
+            0, // Start depth from 0
             local_max_depth,
             local_max_children,
         );
-
-        if log_groups_vec.is_empty() {
-            log_groups_vec.push(LogGroup::new(new_record));
-            return Ok(true);
-        } else {
-            let mut best_match_score = 0;
-            let mut best_match_idx: Option<usize> = None;
-
-            for (idx, group) in log_groups_vec.iter_mut().enumerate() {
-                let current_score = new_record.calc_sim_score(group.event());
-                if current_score > best_match_score {
-                    best_match_score = current_score;
-                    best_match_idx = Some(idx);
-                }
-            }
-
-            let score_ratio =
-                Ratio::<BigInt>::new(BigInt::from(best_match_score), BigInt::from(length));
-            
-            if best_match_idx.is_some() && score_ratio > local_threshold {
-                if let Some(idx) = best_match_idx {
-                    log_groups_vec[idx].add_example(new_record);
-                    return Ok(false);
-                } else {
-                    unreachable!();
-                }
-            } else {
-                log_groups_vec.push(LogGroup::new(new_record));
-                return Ok(true);
-            }
-        }
-        */
-        Ok(true) // Placeholder return
+        log_groups_vec_for_new.push(LogGroup::new(new_record)); // new_record is moved here
+        Ok(true) // Created new group
     }
 }
