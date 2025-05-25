@@ -22,8 +22,10 @@ use tracing::instrument;
 use crate::{log_group::LogGroup, record::Record};
 
 lazy_static! {
-    pub(crate) static ref INTERNER: Arc<RwLock<StringInterner>> =
-        Arc::new(RwLock::new(StringInterner::default()));
+    pub(crate) static ref INTERNER: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>> =
+        Arc::new(RwLock::new(StringInterner::<
+            string_interner::backend::BucketBackend,
+        >::new()));
 }
 #[derive(Debug, Clone)]
 pub struct SingleLayer {
@@ -31,7 +33,7 @@ pub struct SingleLayer {
     // NumTokens -> First Token -> List of Log groups
     base_layer: HashMap<usize, HashMap<DefaultSymbol, Vec<LogGroup>>>,
     pub threshold: Ratio<BigInt>,
-    strings: Arc<RwLock<StringInterner>>,
+    strings: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>>,
 }
 
 impl SingleLayer {
@@ -100,11 +102,11 @@ impl SingleLayer {
                         log_groups.push(LogGroup::new(new_record));
                         Ok(true)
                     }
-                },
+                }
                 None => {
                     second_layer.insert(first, vec![LogGroup::new(new_record)]);
                     Ok(true)
-                },
+                }
             }
         } else {
             self.base_layer.insert(length, HashMap::new());
@@ -165,7 +167,7 @@ mod should {
     use spectral::prelude::*;
     use tracing_test::traced_test;
 
-    use crate::drains::simple::SingleLayer;
+    use crate::drains::simple::SingleLayer; // Removed <BucketBackend> for now, will add if compiler complains
 
     #[traced_test]
     #[test]

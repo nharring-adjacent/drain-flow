@@ -2,16 +2,17 @@
 name = "drain-flow"
 version = "0.5.2"
 edition = "2021"
+rust-version="1.86.0"
 
 [dependencies]
 anyhow = "1.0.63"
 chrono = "0.4.22"
 custom_derive = "0.1.7"
-derive_more = "0.99.17"
+derive_more = { version="2.0.0", features=["full"]}
 enum_derive = "0.1.7"
 float_eq = "1.0.0"
-fraction = "0.11.1"
-itertools = "0.10.3"
+fraction = "0.15.1"
+itertools = "0.14.0"
 lazy_static = "1.4.0"
 joinery = "3.0.0"
 parking_lot = { version = "0.12.1", features = [
@@ -21,15 +22,15 @@ parking_lot = { version = "0.12.1", features = [
 regex = "1.6.0"
 rksuid = { git = "https://github.com/nharring-adjacent/rksuid" }
 spectral = "0.6.0"
-string-interner = "0.14.0"
+string-interner = "0.19.0"
 tracing = "0.1.36"
 
 
 [dev-dependencies]
 chrono = "0.4"
-criterion = {version = "0.3", features = ["html_reports"]}
+criterion = {version = "0.5.1", features = ["html_reports"]}
 proptest = "1.0.0"
-rand = "0.8.5"
+rand = "0.9.0"
 serde = "1.0.144"
 serde_derive = "1.0.144"
 serde_json = "1.0.85"

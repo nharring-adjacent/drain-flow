@@ -79,7 +79,10 @@ impl Record {
 
     #[instrument(level = "trace")]
     pub fn resolve(sym: DefaultSymbol) -> Option<String> {
-        INTERNER.read().resolve(sym).map(std::borrow::ToOwned::to_owned)
+        INTERNER
+            .read()
+            .resolve(sym)
+            .map(std::borrow::ToOwned::to_owned)
     }
 }
 
@@ -101,24 +104,18 @@ impl Iterator for IntoIter {
             return None;
         }
         let sym = match self.record.inner.get_token_at_index(self.index) {
-            Some(t) => {
-                match t {
-                    tokens::Token::Wildcard => "*".to_string(),
-                    tokens::Token::TypedMatch(t) => format!("{}", t),
-                    tokens::Token::Value(v) => {
-                        match v {
-                            TypedToken::String(sym) => {
-                                INTERNER
-                                    .read()
-                                    .resolve(sym)
-                                    .expect("symbol failed to resolve")
-                                    .to_owned()
-                            },
-                            TypedToken::Int(i) => i.to_string(),
-                            TypedToken::Float(f) => f.to_string(),
-                        }
-                    },
-                }
+            Some(t) => match t {
+                tokens::Token::Wildcard => "*".to_string(),
+                tokens::Token::TypedMatch(t) => format!("{}", t),
+                tokens::Token::Value(v) => match v {
+                    TypedToken::String(sym) => INTERNER
+                        .read()
+                        .resolve(sym)
+                        .expect("symbol failed to resolve")
+                        .to_owned(),
+                    TypedToken::Int(i) => i.to_string(),
+                    TypedToken::Float(f) => f.to_string(),
+                },
             },
             None => unreachable!(),
         };
@@ -139,7 +136,7 @@ impl IntoIterator for Record {
         }
     }
 }
-impl<'a> Iterator for RefIterator<'a> {
+impl Iterator for RefIterator<'_> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Token> {

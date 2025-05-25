@@ -20,7 +20,7 @@ use self::generators::LogGenerator;
 pub fn benchmark_sink(c: &mut Criterion) {
     let mut drain = SingleLayer::new(vec![]).unwrap();
     let generator = LogGenerator::new().unwrap();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rngs::ThreadRng::default();
     for size in [100usize, 500usize, 1000usize, 5000usize] {
         let lines = (0..size)
             .map(|_| {
@@ -28,10 +28,10 @@ pub fn benchmark_sink(c: &mut Criterion) {
                     ts: Utc::now().to_string(),
                     remote: format!(
                         "{}.{}.{}.{}",
-                        rng.gen_range(1..255),
-                        rng.gen_range(1..255),
-                        rng.gen_range(1..255),
-                        rng.gen_range(1..255)
+                        rng.random_range(1..=254),
+                        rng.random_range(1..=254),
+                        rng.random_range(1..=254),
+                        rng.random_range(1..=254)
                     ),
                     status: 300usize,
                     message: "baz".to_string(),
