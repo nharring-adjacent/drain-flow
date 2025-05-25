@@ -8,7 +8,10 @@
 // Server Side Public License along with this program.
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
-use std::{collections::HashMap, fmt::{self, Display}};
+use std::{
+    collections::HashMap,
+    fmt::{self, Display},
+};
 
 use itertools::Itertools;
 use joinery::JoinableIterator;
@@ -158,7 +161,7 @@ impl Token {
             .collect();
 
         debug!("comparing {} tokens", match_types.len());
-        
+
         let tok = match match_types.len() {
             0 => Token::Value(TypedToken::from_parse(input)),
             1 => {
@@ -166,7 +169,7 @@ impl Token {
                 let grokker = Grokker::from_match_index(idx).unwrap();
                 debug!(%grokker, "single match");
                 Token::TypedMatch(grokker)
-            },
+            }
             2 => {
                 debug!(?match_types, "2 match arm");
                 // UUID and hostname can overlap, if they do its 99.999% a UUID
@@ -203,7 +206,7 @@ impl Token {
                 }
                 debug!("fallback to wildcard");
                 Token::Wildcard
-            },
+            }
             3 => {
                 debug!(?match_types, "3 match arm");
                 // All base10 integers also match as base16 and weirdly as hostnames
@@ -224,7 +227,7 @@ impl Token {
                 }
                 debug!("fallback to wildcard");
                 Token::Wildcard
-            },
+            }
             // Todo: Explore if there is a way to figure out a "best match"
             _ => Token::Wildcard,
         };
@@ -237,18 +240,14 @@ impl fmt::Display for Token {
         let out: String = match self {
             Token::Wildcard => "*".to_string(),
             Token::TypedMatch(t) => t.to_string(),
-            Token::Value(v) => {
-                match v {
-                    TypedToken::String(sym) => {
-                        INTERNER
-                            .read()
-                            .resolve(*sym)
-                            .expect("symbols must resolve")
-                            .to_string()
-                    },
-                    TypedToken::Int(i) => format!("{}", i),
-                    TypedToken::Float(f) => f.to_string(),
-                }
+            Token::Value(v) => match v {
+                TypedToken::String(sym) => INTERNER
+                    .read()
+                    .resolve(*sym)
+                    .expect("symbols must resolve")
+                    .to_string(),
+                TypedToken::Int(i) => format!("{}", i),
+                TypedToken::Float(f) => f.to_string(),
             },
         };
         write!(f, "{}", out)
@@ -259,17 +258,13 @@ impl From<Token> for DefaultSymbol {
     fn from(tok: Token) -> DefaultSymbol {
         match tok {
             Token::Wildcard => *ASTERISK,
-            Token::TypedMatch(t) => {
-                *GROKKER_SYMS
-                    .get(&t)
-                    .expect("every grokker must have a symbol")
-            },
-            Token::Value(v) => {
-                match v {
-                    TypedToken::String(s) => s,
-                    TypedToken::Int(i) => INTERNER.write().get_or_intern(i.to_string()),
-                    TypedToken::Float(f) => INTERNER.write().get_or_intern(f.to_string()),
-                }
+            Token::TypedMatch(t) => *GROKKER_SYMS
+                .get(&t)
+                .expect("every grokker must have a symbol"),
+            Token::Value(v) => match v {
+                TypedToken::String(s) => s,
+                TypedToken::Int(i) => INTERNER.write().get_or_intern(i.to_string()),
+                TypedToken::Float(f) => INTERNER.write().get_or_intern(f.to_string()),
             },
         }
     }
@@ -304,7 +299,6 @@ impl Display for Offset {
         write!(f, "Offset(start: {}, end: {})", self.start, self.end)
     }
 }
-
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TokenStream {

@@ -23,7 +23,9 @@ use crate::{log_group::LogGroup, record::Record};
 
 lazy_static! {
     pub(crate) static ref INTERNER: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>> =
-        Arc::new(RwLock::new(StringInterner::<string_interner::backend::BucketBackend>::new()));
+        Arc::new(RwLock::new(StringInterner::<
+            string_interner::backend::BucketBackend,
+        >::new()));
 }
 #[derive(Debug, Clone)]
 pub struct SingleLayer {
@@ -100,11 +102,11 @@ impl SingleLayer {
                         log_groups.push(LogGroup::new(new_record));
                         Ok(true)
                     }
-                },
+                }
                 None => {
                     second_layer.insert(first, vec![LogGroup::new(new_record)]);
                     Ok(true)
-                },
+                }
             }
         } else {
             self.base_layer.insert(length, HashMap::new());
@@ -165,7 +167,7 @@ mod should {
     use spectral::prelude::*;
     use tracing_test::traced_test;
 
-    use crate::drains::simple::{SingleLayer}; // Removed <BucketBackend> for now, will add if compiler complains
+    use crate::drains::simple::SingleLayer; // Removed <BucketBackend> for now, will add if compiler complains
 
     #[traced_test]
     #[test]
