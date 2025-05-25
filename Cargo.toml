@@ -20,8 +20,8 @@ parking_lot = { version = "0.12.1", features = [
     "send_guard",
 ] }
 regex = "1.6.0"
-rksuid = { git = "https://github.com/nharring-adjacent/rksuid" }
 spectral = "0.6.0"
+uuid = { version = "1.0", features = ["v4"] }
 string-interner = "0.19.0"
 tracing = "0.1.36"
 

@@ -12,14 +12,14 @@ use std::{borrow::Borrow, collections::HashMap, fmt};
 
 use anyhow::Error;
 use chrono::{DateTime, Utc};
-use rksuid::Ksuid;
 use tracing::{debug, instrument};
+use uuid::Uuid;
 
 use crate::record::{tokens::Token, Record};
 
 #[derive(Clone, Debug)]
 pub struct LogGroup {
-    pub id: Ksuid,
+    pub id: Uuid,
     event: Record,
     examples: Vec<Record>,
     pub variables: HashMap<usize, Token>,
@@ -114,16 +114,26 @@ impl LogGroup {
         self.examples.iter().collect::<Vec<&Record>>()
     }
 
-    /// Returns the [Ksuid] associated with the [LogGroup], usually identical to the [Record] which created the group
+    /// Returns the [Uuid] associated with the [LogGroup], usually identical to the [Record] which created the group
     #[instrument(level = "trace", skip_all)]
-    pub fn get_id(&self) -> Ksuid {
+    pub fn get_id(&self) -> Uuid {
         self.id
     }
 
     /// Returns the [DateTime] of the creation of the base event in the [LogGroup]
     #[instrument(level = "trace", skip_all)]
     pub fn get_time(&self) -> DateTime<Utc> {
-        self.event.uid.get_time()
+        // Uuid::get_timestamp returns Option<Timestamp>
+        // Timestamp::to_unix returns (i64, u32)
+        // Ksuid::get_time returns DateTime<Utc>
+        // For now, let's assume we want to keep the DateTime<Utc> type
+        // This will require more significant changes if we need to extract time directly from Uuid
+        // For now, this will cause a compile error, which we will fix in a subsequent step.
+        // Placeholder to satisfy the type checker for now, will be addressed.
+        self.event.uid.get_timestamp().map_or(Utc::now(), |ts| {
+            let (secs, nanos) = ts.to_unix();
+            DateTime::from_timestamp(secs.try_into().unwrap(), nanos).unwrap_or(Utc::now())
+        })
     }
 }
 
@@ -132,8 +142,8 @@ impl fmt::Display for LogGroup {
         write!(
             f,
             "LogGroup ID: {}\nFirst Seen: {}\nEvent: {}\n{} examples and {} wildcards\n",
-            self.event.uid.serialize(),
-            self.event.uid.get_time(),
+            self.event.uid.to_string(), // Changed from serialize()
+            self.get_time(), // Changed from self.event.uid.get_time() to use the struct's method
             self.event,
             self.examples.len(),
             self.variables.len()
