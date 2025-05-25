@@ -20,7 +20,7 @@ use regex::RegexSet;
 use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 
-use super::ASTERISK;
+pub use super::ASTERISK; // Made ASTERISK re-export public
 use crate::drains::simple::INTERNER;
 
 lazy_static! {
