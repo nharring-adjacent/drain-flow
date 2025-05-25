@@ -14,9 +14,9 @@ extern crate derive_more;
 use std::fmt;
 
 use lazy_static::lazy_static;
-use rksuid::Ksuid;
 use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
+use uuid::Uuid;
 
 use self::tokens::{Token, TokenStream, TypedToken};
 use crate::drains::simple::INTERNER;
@@ -27,14 +27,14 @@ lazy_static! {
 #[derive(Clone, Debug)]
 pub struct Record {
     pub(crate) inner: TokenStream,
-    pub uid: Ksuid,
+    pub uid: Uuid,
 }
 impl Record {
     #[instrument(name = "Create new record", level = "trace", skip(line))]
     pub fn new(line: String) -> Self {
         Self {
             inner: TokenStream::from_unicode_line(&line),
-            uid: Ksuid::new(),
+            uid: Uuid::new_v4(),
         }
     }
 
