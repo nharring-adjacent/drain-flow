@@ -9,3 +9,4 @@
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
 pub mod simple;
+pub mod two_stage_drain;

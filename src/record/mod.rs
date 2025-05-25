@@ -22,7 +22,7 @@ use self::tokens::{Token, TokenStream, TypedToken};
 use crate::drains::simple::INTERNER;
 
 lazy_static! {
-    static ref ASTERISK: DefaultSymbol = INTERNER.write().get_or_intern_static("*");
+    static ref ASTERISK: DefaultSymbol = INTERNER.write().get_or_intern_static("<*>");
 }
 #[derive(Clone, Debug)]
 pub struct Record {
