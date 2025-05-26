@@ -45,3 +45,7 @@ harness = false
 [[bench]]
 name = "sink_benchmark"
 harness = false
+
+[[bench]]
+name = "two_stage_drain_integration_test"
+harness = false

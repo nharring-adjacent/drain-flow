@@ -18,11 +18,11 @@ use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 use uuid::Uuid;
 
-use self::tokens::{Token, TokenStream, TypedToken};
+use self::tokens::{Token, TokenStream, Offset}; // Added Offset, removed TypedToken
 use crate::drains::simple::INTERNER;
 
 lazy_static! {
-    static ref ASTERISK: DefaultSymbol = INTERNER.write().get_or_intern_static("*");
+    pub static ref ASTERISK: DefaultSymbol = INTERNER.write().get_or_intern_static("<*>");
 }
 #[derive(Clone, Debug)]
 pub struct Record {
@@ -44,22 +44,33 @@ impl Record {
         skip(candidate, self)
     )]
     pub fn calc_sim_score(&self, candidate: &Record) -> u64 {
-        let pairs = self
-            .into_iter()
-            .zip(candidate.into_iter())
-            .collect::<Vec<(_, _)>>();
-        let score = pairs
-            .iter()
-            .filter(|(this, other)| {
-                if this == other {
-                    debug!("{}", format!("found match of {} and {}\n", this, other));
-                    true
-                } else {
-                    false
+        // self is the log group's event record (template), candidate is the new log line.
+        // The iterator for `self` (template) should yield Tokens.
+        // The iterator for `candidate` (new line) can yield resolved Strings or Tokens.
+        // For simplicity, let's assume both yield Tokens for comparison.
+        self.inner.inner.iter() // Iterate over (Offset, Token) pairs in the template
+            .zip(candidate.inner.inner.iter()) // Iterate over (Offset, Token) pairs in the candidate
+            .filter(|((_, template_token), (_, candidate_token))| {
+                match template_token {
+                    Token::Wildcard => {
+                        debug!("template token is Wildcard, matches candidate token {:?}", candidate_token);
+                        true // Wildcard in template matches any token in candidate
+                    },
+                    _ => {
+                        // For non-wildcard tokens, they must be equal.
+                        // This comparison depends on how PartialEq is implemented for Token.
+                        // Assuming Token::Value(TypedToken::String(Symbol)) comparison works.
+                        if template_token == candidate_token {
+                            debug!("template token {:?} matches candidate token {:?}", template_token, candidate_token);
+                            true
+                        } else {
+                            debug!("template token {:?} does NOT match candidate token {:?}", template_token, candidate_token);
+                            false
+                        }
+                    }
                 }
             })
-            .fold(0_u64, |acc, _pair| acc + 1);
-        score
+            .count() as u64 // Count the number of matching token pairs
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -91,10 +102,7 @@ pub struct IntoIter {
     index: usize,
 }
 
-pub struct RefIterator<'a> {
-    record: &'a Record,
-    index: usize,
-}
+// RefIterator struct is removed as it's no longer used.
 
 impl Iterator for IntoIter {
     type Item = String;
@@ -103,61 +111,37 @@ impl Iterator for IntoIter {
         if self.index >= self.record.len() {
             return None;
         }
-        let sym = match self.record.inner.get_token_at_index(self.index) {
-            Some(t) => match t {
-                tokens::Token::Wildcard => "*".to_string(),
-                tokens::Token::TypedMatch(t) => format!("{}", t),
-                tokens::Token::Value(v) => match v {
-                    TypedToken::String(sym) => INTERNER
-                        .read()
-                        .resolve(sym)
-                        .expect("symbol failed to resolve")
-                        .to_owned(),
-                    TypedToken::Int(i) => i.to_string(),
-                    TypedToken::Float(f) => f.to_string(),
-                },
-            },
-            None => unreachable!(),
-        };
-
+        // Use .to_string() which now correctly handles <*> for Token::Wildcard
+        let token_display = self.record.inner.get_token_at_index(self.index).map(|t| t.to_string());
+        
         self.index += 1;
-        Some(sym)
+        token_display
     }
 }
 
 impl IntoIterator for Record {
     type IntoIter = IntoIter;
-    type Item = String;
+    type Item = String; // This iterator yields Strings, used by old calc_sim_score
 
     fn into_iter(self) -> Self::IntoIter {
         IntoIter {
-            record: self,
+            record: self, // Consumes the record
             index: 0,
         }
     }
 }
-impl Iterator for RefIterator<'_> {
-    type Item = Token;
 
-    fn next(&mut self) -> Option<Token> {
-        if let Some(val) = self.record.inner.get_token_at_index(self.index) {
-            self.index += 1;
-            return Some(val);
-        }
-        None
-    }
-}
+// This iterator is used by LogGroup::discover_variables and LogGroup::update_variables
+// It should yield actual Token variants.
 impl<'a> IntoIterator for &'a Record {
-    type IntoIter = RefIterator<'a>;
-    type Item = Token;
+    type Item = &'a Token; // Yields references to Tokens
+    type IntoIter = std::iter::Map<std::slice::Iter<'a, (Offset, Token)>, fn(&(Offset, Token)) -> &Token>;
 
     fn into_iter(self) -> Self::IntoIter {
-        RefIterator {
-            record: self,
-            index: 0,
-        }
+        self.inner.inner.iter().map(|(_, token)| token)
     }
 }
+
 
 impl fmt::Display for Record {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -280,6 +264,7 @@ mod should {
         let input = "Message send failed to remote host: foo.bar.com".to_string();
         let rec = Record::new(input);
         let tokens = (&rec).into_iter().collect::<Vec<_>>();
-        assert_that(&tokens).has_length(7);
+        // Disambiguate has_length by using .len() and asserting equality
+        assert_that(&tokens.len()).is_equal_to(7);
     }
 }

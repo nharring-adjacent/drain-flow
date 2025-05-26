@@ -20,7 +20,7 @@ use regex::RegexSet;
 use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 
-use super::ASTERISK;
+pub use super::ASTERISK; // Made ASTERISK re-export public
 use crate::drains::simple::INTERNER;
 
 lazy_static! {
@@ -238,7 +238,7 @@ impl Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let out: String = match self {
-            Token::Wildcard => "*".to_string(),
+            Token::Wildcard => "<*>".to_string(),
             Token::TypedMatch(t) => t.to_string(),
             Token::Value(v) => match v {
                 TypedToken::String(sym) => INTERNER
