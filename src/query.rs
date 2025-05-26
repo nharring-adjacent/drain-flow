@@ -76,6 +76,8 @@ pub struct LogQlQuery {
 
 #[derive(Debug, Clone)]
 pub enum QuerySource {
+    ById(Uuid),
+    ByLogQl(LogQlQuery),
     // This was part of the original definitions to be restored
 }
 
