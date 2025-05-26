@@ -21,7 +21,7 @@ parking_lot = { version = "0.12.1", features = [
 ] }
 regex = "1.6.0"
 spectral = "0.6.0"
-uuid = { version = "1.0", features = ["v4"] }
+uuid = { version = "1.0", features = ["v4", "v1"] }
 string-interner = "0.19.0"
 tracing = "0.1.36"
 
@@ -48,4 +48,8 @@ harness = false
 
 [[bench]]
 name = "two_stage_drain_integration_test"
+harness = false
+
+[[bench]]
+name = "drain_benchmarks"
 harness = false

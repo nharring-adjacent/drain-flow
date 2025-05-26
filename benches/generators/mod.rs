@@ -15,7 +15,7 @@ use serde_derive::{Deserialize, Serialize};
 use tinytemplate::TinyTemplate;
 
 #[derive(Serialize, Deserialize)]
-pub(crate) enum RecordTemplate {
+pub enum RecordTemplate {
     Json(Json),
     NGINXAccess(NGINXAccess),
     Qmail(Qmail),
@@ -25,7 +25,7 @@ pub(crate) enum RecordTemplate {
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Json {
+pub struct Json {
     pub event_type: String,
     pub callsite: String,
     pub app_name: String,
@@ -33,7 +33,7 @@ pub(crate) struct Json {
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct NGINXAccess {
+pub struct NGINXAccess {
     pub ts: String,
     pub client: String,
     pub method: String,
@@ -43,10 +43,10 @@ pub(crate) struct NGINXAccess {
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Qmail;
+pub struct Qmail;
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Sendmail {
+pub struct Sendmail {
     pub ts: String,
     pub remote: String,
     pub status: usize,
@@ -54,7 +54,7 @@ pub(crate) struct Sendmail {
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct SlowQuery {
+pub struct SlowQuery {
     pub ts: String,
     pub db: String,
     pub op: String,
@@ -65,7 +65,7 @@ pub(crate) struct SlowQuery {
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Syslog {
+pub struct Syslog {
     pub ts: String,
     pub facility: String,
     pub severity: String,
@@ -78,7 +78,7 @@ const SENDMAIL_TEMPLATE: &str =
 const SLOW_QUERY_TEMPLATE: &str = "{ foo }";
 const SYSLOG_TEMPLATE: &str = "{ foo }";
 
-pub(crate) struct LogGenerator<'a> {
+pub struct LogGenerator<'a> {
     tiny: TinyTemplate<'a>,
 }
 
@@ -93,7 +93,7 @@ impl LogGenerator<'_> {
         Ok(Self { tiny: tt })
     }
 
-    pub(crate) fn make_record(&self, template: RecordTemplate) -> String {
+    pub fn make_record(&self, template: RecordTemplate) -> String {
         match template {
             RecordTemplate::Json(j) => serde_json::to_string(&j).expect(""),
             RecordTemplate::NGINXAccess(n) => self.tiny.render("nginx", &n).expect(""),

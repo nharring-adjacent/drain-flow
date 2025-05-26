@@ -128,11 +128,15 @@ impl LogGroup {
         // Ksuid::get_time returns DateTime<Utc>
         // For now, let's assume we want to keep the DateTime<Utc> type
         // This will require more significant changes if we need to extract time directly from Uuid
-        // For now, this will cause a compile error, which we will fix in a subsequent step.
-        // Placeholder to satisfy the type checker for now, will be addressed.
+        // Uuid::get_timestamp returns Option<Timestamp>
+        // Timestamp::to_unix returns (u64, u32) for UUIDv1
+        // DateTime::from_timestamp expects i64 for seconds.
         self.event.uid.get_timestamp().map_or(Utc::now(), |ts| {
-            let (secs, nanos) = ts.to_unix();
-            DateTime::from_timestamp(secs.try_into().unwrap(), nanos).unwrap_or(Utc::now())
+            let (secs_u64, nanos) = ts.to_unix();
+            // Convert u64 seconds to i64. This is safe as long as the timestamp is not
+            // extremely far in the future, which is a reasonable assumption for log events.
+            let secs_i64 = secs_u64 as i64;
+            DateTime::from_timestamp(secs_i64, nanos).unwrap_or_else(|| Utc::now())
         })
     }
 }
