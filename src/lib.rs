@@ -16,3 +16,18 @@ extern crate enum_derive;
 pub mod drains;
 pub mod log_group;
 pub mod record;
+
+/// # Log Querying
+///
+/// This module provides structures and functions for querying processed log data that has
+/// been structured into `LogGroup`s. The primary structure for accessing and managing
+/// this data is the `LogStore`.
+///
+/// Key functionalities include:
+/// - Storing and retrieving `LogGroup`s by their unique ID.
+/// - Filtering `LogGroup`s based on a specific time range.
+/// - Performing range-based aggregation on the example records of a specific `LogGroup`
+///   (identified by its ID) via the `query::query_log_range_aggregation` function.
+///   This allows for detailed analysis of log events matching a particular pattern
+///   within a given time window.
+pub mod query;

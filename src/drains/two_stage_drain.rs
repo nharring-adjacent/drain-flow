@@ -293,20 +293,34 @@ impl TwoStageDrain {
     ) {
         match node.kind {
             NodeKind::Leaf(ref mut groups) => {
+                // This method is used when restructuring the tree (e.g. internal to leaf).
+                // It takes ownership of the groups. For benchmarking, we need clones.
                 all_log_groups.append(&mut std::mem::take(groups));
             }
             NodeKind::Internal(ref mut children_map) => {
                 for child_node in children_map.values_mut() {
-                    // Note: Recursive call needs to be Self:: or TwoStageDrain:: if it's a static method
-                    // For now, assuming it's made a free function or handled appropriately.
-                    // If it remains an instance method (even without using &self), this call needs care.
-                    // Let's assume it's called as a static-like method or free function for now.
                     Self::collect_log_groups_from_node(child_node, all_log_groups);
                 }
             }
         }
     }
 
+    // New recursive helper for collect_all_log_groups (read-only traversal)
+    fn collect_groups_recursive(node: &Node, collected_groups: &mut Vec<LogGroup>) {
+        match &node.kind {
+            NodeKind::Leaf(groups) => {
+                for group in groups {
+                    collected_groups.push(group.clone());
+                }
+            }
+            NodeKind::Internal(children_map) => {
+                for child_node in children_map.values() {
+                    Self::collect_groups_recursive(child_node, collected_groups);
+                }
+            }
+        }
+    }
+    
     // get_or_create_log_group_mut no longer needs &mut self
     // It operates on current_node and global INTERNER, and parameters.
     // However, to be callable from process_line which has &mut self,
@@ -575,5 +589,13 @@ impl TwoStageDrain {
         );
         log_groups_vec_for_new.push(LogGroup::new(new_record)); // new_record is moved here
         Ok(true) // Created new group
+    }
+
+    pub fn collect_all_log_groups(&self) -> Vec<LogGroup> {
+        let mut all_groups = Vec::new();
+        for node in self.tree.values() {
+            Self::collect_groups_recursive(node, &mut all_groups);
+        }
+        all_groups
     }
 }

@@ -31,6 +31,13 @@ fn básico_drain_test_harness(lines: Vec<String>, expected_groups: usize) -> Res
     Ok(())
 }
 
+fn main() {
+    // This benchmark is intended to be run with `cargo test --bench two_stage_drain_integration_test`
+    // or by directly invoking test functions if used as a library.
+    // Adding a dummy main for `harness = false` when `cargo check --benches` is run.
+    println!("Run tests in this file using `cargo test --benches` or specific test invocation.");
+}
+
 #[test]
 fn test_basic_drain_integration_simple_lines() -> Result<()> {
     let lines = vec![

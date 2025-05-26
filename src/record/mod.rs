@@ -32,9 +32,22 @@ pub struct Record {
 impl Record {
     #[instrument(name = "Create new record", level = "trace", skip(line))]
     pub fn new(line: String) -> Self {
+        // Generate a V1 UUID (timestamp-based)
+        // Requires a timestamp and a 16-byte node ID.
+        // For the node ID, we can use a constant byte array.
+        // The uniqueness of the node ID is not critical for this application.
+        let now = chrono::Utc::now();
+        let context = uuid::NoContext; // Added context for clock sequence
+        let timestamp = uuid::v1::Timestamp::from_unix(
+            context, // Added context as the first argument
+            now.timestamp() as u64,
+            now.timestamp_subsec_nanos(),
+        );
+        // Example node ID, can be any 6 bytes.
+        const NODE_ID: &[u8; 6] = b"drainf";
         Self {
             inner: TokenStream::from_unicode_line(&line),
-            uid: Uuid::new_v4(),
+            uid: Uuid::new_v1(timestamp, NODE_ID),
         }
     }
 
