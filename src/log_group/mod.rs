@@ -56,7 +56,8 @@ impl LogGroup {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn event(&self) -> &Record { // This is the original event/base_record
+    pub fn event(&self) -> &Record {
+        // This is the original event/base_record
         &self.event
     }
 

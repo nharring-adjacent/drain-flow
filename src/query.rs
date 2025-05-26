@@ -75,15 +75,11 @@ pub struct LogQlQuery {
 }
 
 #[derive(Debug, Clone)]
-pub enum QuerySource { // This was part of the original definitions to be restored
-    ById(Uuid),
-    ByLogQl(LogQlQuery),
+pub enum QuerySource {
+    // This was part of the original definitions to be restored
 }
 
-pub fn execute_logql_query<'a>(
-    log_store: &'a LogStore,
-    query: &LogQlQuery,
-) -> Vec<&'a Record> {
+pub fn execute_logql_query<'a>(log_store: &'a LogStore, query: &LogQlQuery) -> Vec<&'a Record> {
     let mut records_batch: Vec<&'a Record> = Vec::new();
 
     match &query.selector {
@@ -98,14 +94,11 @@ pub fn execute_logql_query<'a>(
     }
 
     if let Some(filter) = &query.filter {
-        records_batch.retain(|record| {
-            record.to_string().contains(&filter.contains)
-        });
+        records_batch.retain(|record| record.to_string().contains(&filter.contains));
     }
 
     records_batch
 }
-
 
 pub fn query_log_range_aggregation<'a>(
     log_store: &'a LogStore,
@@ -115,7 +108,8 @@ pub fn query_log_range_aggregation<'a>(
 ) -> Vec<&'a Record> {
     let initial_records: Vec<&'a Record> = match query_source {
         QuerySource::ById(group_id) => {
-            log_store.get_log_group_by_id(group_id)
+            log_store
+                .get_log_group_by_id(group_id)
                 .map_or(vec![], |log_group| {
                     let mut records = vec![log_group.base_record()];
                     records.extend(log_group.examples().iter());
@@ -130,37 +124,33 @@ pub fn query_log_range_aggregation<'a>(
 
     initial_records
         .into_iter()
-                .filter(|record| {
-                    record.uid.get_timestamp().map_or(false, |ts| {
-                        let (secs_u64, nanos) = ts.to_unix();
-                        let secs_i64 = secs_u64 as i64;
-                        if let Some(timestamp) = DateTime::from_timestamp(secs_i64, nanos) {
-                            timestamp >= start_time && timestamp <= end_time
-                        } else {
-                            false
-                        }
-                    })
-                })
-                .collect()
-        }
-        None => vec![],
-    }
+        .filter(|record| {
+            record.uid.get_timestamp().map_or(false, |ts| {
+                let (secs_u64, nanos) = ts.to_unix();
+                let secs_i64 = secs_u64 as i64;
+                if let Some(timestamp) = DateTime::from_timestamp(secs_i64, nanos) {
+                    timestamp >= start_time && timestamp <= end_time
+                } else {
+                    false
+                }
+            })
+        })
+        .collect()
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::Duration as ChronoDuration;
-    use chrono::{Utc, TimeZone}; // Keep Utc, add TimeZone for later proptest use
+    use chrono::{TimeZone, Utc}; // Keep Utc, add TimeZone for later proptest use
+    use proptest::collection::vec as prop_vec; // Added for proptest
+    use proptest::prelude::*; // Added for proptest
+    use proptest::sample::subsequence; // Added for subsequence
+    use rand::Rng;
+    use std::collections::HashSet; // Added for proptest
     use std::thread::sleep;
     use std::time::Duration as StdDuration;
-    use uuid::{Uuid, Version};
-    use proptest::prelude::*; // Added for proptest
-    use proptest::collection::vec as prop_vec; // Added for proptest
-    use proptest::sample::subsequence; // Added for subsequence
-    use std::collections::HashSet; // Added for proptest
-    use rand::Rng; // Added for proptest
+    use uuid::{Uuid, Version}; // Added for proptest
 
     // Helper to create a record and get its timestamp
     fn get_record_timestamp(record: &Record) -> Option<DateTime<Utc>> {
@@ -191,10 +181,7 @@ mod tests {
 
     // Strategy for Option<LineFilter>
     fn arb_optional_line_filter() -> impl Strategy<Value = Option<LineFilter>> {
-        prop_oneof![
-            Just(None),
-            arb_line_filter().prop_map(Some),
-        ]
+        prop_oneof![Just(None), arb_line_filter().prop_map(Some),]
     }
 
     // Strategy for DateTime<Utc>
@@ -206,14 +193,15 @@ mod tests {
 
     // Strategy for LogGroup
     fn arb_log_group() -> impl Strategy<Value = LogGroup> {
-        (arb_record(), prop_vec(arb_record(), 0..5usize))
-            .prop_map(|(base_record, example_records)| {
+        (arb_record(), prop_vec(arb_record(), 0..5usize)).prop_map(
+            |(base_record, example_records)| {
                 let mut group = LogGroup::new(base_record);
                 for rec in example_records {
                     group.add_example(rec);
                 }
                 group
-            })
+            },
+        )
     }
 
     // This will be used to construct LogStore and a list of its valid Uuids for selectors
@@ -237,27 +225,28 @@ mod tests {
         // Strategy to generate some random Uuids (potentially not in the store)
         let random_ids_strategy = prop_vec(Just(Uuid::new_v4()), 0..3usize) // 0 to 3 random UUIDs
             .prop_map(StreamSelector::LogGroupIds);
-        
+
         prop_oneof![
             id_subset_strategy,
             random_ids_strategy,
             // Mix of valid and random
-            (subsequence(valid_ids, 0..valid_ids.len()), prop_vec(Just(Uuid::new_v4()), 0..2usize))
+            (
+                subsequence(valid_ids, 0..valid_ids.len()),
+                prop_vec(Just(Uuid::new_v4()), 0..2usize)
+            )
                 .prop_map(|(mut subset, mut random_guids)| {
                     subset.append(&mut random_guids);
                     StreamSelector::LogGroupIds(subset)
                 })
-        ].boxed()
+        ]
+        .boxed()
     }
 
     // Strategy for LogQlQuery
     fn arb_logql_query(valid_ids: Vec<Uuid>) -> impl Strategy<Value = LogQlQuery> {
         (arb_stream_selector(valid_ids), arb_optional_line_filter())
-            .prop_map(|(selector, filter)| {
-                LogQlQuery { selector, filter }
-            })
+            .prop_map(|(selector, filter)| LogQlQuery { selector, filter })
     }
-
 
     #[test]
     fn test_record_uuid_timestamp_extraction() {
