@@ -18,7 +18,7 @@ use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 use uuid::Uuid;
 
-use self::tokens::{Token, TokenStream, Offset}; // Added Offset, removed TypedToken
+use self::tokens::{Offset, Token, TokenStream}; // Added Offset, removed TypedToken
 use crate::drains::simple::INTERNER;
 
 lazy_static! {
@@ -61,23 +61,34 @@ impl Record {
         // The iterator for `self` (template) should yield Tokens.
         // The iterator for `candidate` (new line) can yield resolved Strings or Tokens.
         // For simplicity, let's assume both yield Tokens for comparison.
-        self.inner.inner.iter() // Iterate over (Offset, Token) pairs in the template
+        self.inner
+            .inner
+            .iter() // Iterate over (Offset, Token) pairs in the template
             .zip(candidate.inner.inner.iter()) // Iterate over (Offset, Token) pairs in the candidate
             .filter(|((_, template_token), (_, candidate_token))| {
                 match template_token {
                     Token::Wildcard => {
-                        debug!("template token is Wildcard, matches candidate token {:?}", candidate_token);
+                        debug!(
+                            "template token is Wildcard, matches candidate token {:?}",
+                            candidate_token
+                        );
                         true // Wildcard in template matches any token in candidate
-                    },
+                    }
                     _ => {
                         // For non-wildcard tokens, they must be equal.
                         // This comparison depends on how PartialEq is implemented for Token.
                         // Assuming Token::Value(TypedToken::String(Symbol)) comparison works.
                         if template_token == candidate_token {
-                            debug!("template token {:?} matches candidate token {:?}", template_token, candidate_token);
+                            debug!(
+                                "template token {:?} matches candidate token {:?}",
+                                template_token, candidate_token
+                            );
                             true
                         } else {
-                            debug!("template token {:?} does NOT match candidate token {:?}", template_token, candidate_token);
+                            debug!(
+                                "template token {:?} does NOT match candidate token {:?}",
+                                template_token, candidate_token
+                            );
                             false
                         }
                     }
@@ -125,8 +136,12 @@ impl Iterator for IntoIter {
             return None;
         }
         // Use .to_string() which now correctly handles <*> for Token::Wildcard
-        let token_display = self.record.inner.get_token_at_index(self.index).map(|t| t.to_string());
-        
+        let token_display = self
+            .record
+            .inner
+            .get_token_at_index(self.index)
+            .map(|t| t.to_string());
+
         self.index += 1;
         token_display
     }
@@ -148,13 +163,13 @@ impl IntoIterator for Record {
 // It should yield actual Token variants.
 impl<'a> IntoIterator for &'a Record {
     type Item = &'a Token; // Yields references to Tokens
-    type IntoIter = std::iter::Map<std::slice::Iter<'a, (Offset, Token)>, fn(&(Offset, Token)) -> &Token>;
+    type IntoIter =
+        std::iter::Map<std::slice::Iter<'a, (Offset, Token)>, fn(&(Offset, Token)) -> &Token>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.inner.iter().map(|(_, token)| token)
     }
 }
-
 
 impl fmt::Display for Record {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

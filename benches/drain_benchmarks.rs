@@ -8,6 +8,7 @@
 // Server Side Public License along with this program.
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
+use chrono::{Duration as ChronoDuration, Utc};
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use drain_flow::{
     drains::{simple::SingleLayer, two_stage_drain::TwoStageDrain},
@@ -15,10 +16,9 @@ use drain_flow::{
     query::{query_log_range_aggregation, LogStore},
     // record::Record, // Removed as it's unused directly in this file
 };
-use chrono::{Utc, Duration as ChronoDuration};
 // use rand::distributions::Alphanumeric; // Removed problematic import
-use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 // use std::{thread::sleep, time::Duration as StdDuration}; // Removed as sleep is not used here
 
 mod generators;
@@ -44,7 +44,7 @@ fn generate_log_lines(count: usize, seed: u64) -> Vec<String> {
                 CHARSET[idx] as char
             })
             .collect();
-        
+
         let template = RecordTemplate::Sendmail(Sendmail {
             ts: current_time.to_rfc3339(),
             remote: format!("host{}.example.com", rng.gen_range(1..100)),
@@ -88,7 +88,8 @@ fn benchmark_log_store_from_single_layer(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(count), count, |b, &size| {
             let lines = generate_log_lines(size, seed);
             b.iter(|| {
-                let mut drain = SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
+                let mut drain =
+                    SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
                 for line in &lines {
                     drain.process_line(line.clone()).unwrap();
                 }
@@ -124,11 +125,12 @@ fn benchmark_query_on_single_layer_data(c: &mut Criterion) {
     let store = LogStore::from_log_groups(log_groups);
 
     // Find a group with examples for querying
-    let target_group_id_opt = store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now())
+    let target_group_id_opt = store
+        .get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now())
         .iter()
         .find(|lg| !lg.get_examples().is_empty())
         .map(|lg| lg.id);
-    
+
     if target_group_id_opt.is_none() {
         println!("Warning: No suitable LogGroup with examples found for single_layer query benchmark. Skipping.");
         return;
@@ -138,8 +140,14 @@ fn benchmark_query_on_single_layer_data(c: &mut Criterion) {
     let base_time = Utc::now() - ChronoDuration::milliseconds(line_count as i64 / 2); // Middle of generated time range
 
     let time_ranges = [
-        (base_time - ChronoDuration::milliseconds(500), base_time + ChronoDuration::milliseconds(500)), // 1s window
-        (base_time - ChronoDuration::milliseconds(100), base_time + ChronoDuration::milliseconds(100)), // 200ms window
+        (
+            base_time - ChronoDuration::milliseconds(500),
+            base_time + ChronoDuration::milliseconds(500),
+        ), // 1s window
+        (
+            base_time - ChronoDuration::milliseconds(100),
+            base_time + ChronoDuration::milliseconds(100),
+        ), // 200ms window
         (base_time, base_time + ChronoDuration::milliseconds(50)), // 50ms window
     ];
 
@@ -149,14 +157,18 @@ fn benchmark_query_on_single_layer_data(c: &mut Criterion) {
             &(*start_time, *end_time),
             |b, &(s, e)| {
                 b.iter(|| {
-                    query_log_range_aggregation(black_box(&store), black_box(target_group_id), black_box(s), black_box(e));
+                    query_log_range_aggregation(
+                        black_box(&store),
+                        black_box(target_group_id),
+                        black_box(s),
+                        black_box(e),
+                    );
                 });
             },
         );
     }
     group.finish();
 }
-
 
 // --- TwoStageDrain Benchmarks ---
 
@@ -170,7 +182,8 @@ fn benchmark_two_stage_drain_process_line(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(count), count, |b, &size| {
             let lines = generate_log_lines(size, seed);
             // Default params: domain_regex_strings: vec![], threshold: 0.5, max_depth: 4, max_children: 10
-            let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain"); 
+            let mut drain =
+                TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
             b.iter(|| {
                 for line in &lines {
                     drain.process_line(black_box(line.clone())).unwrap();
@@ -191,7 +204,8 @@ fn benchmark_log_store_from_two_stage_drain(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(count), count, |b, &size| {
             let lines = generate_log_lines(size, seed);
             b.iter(|| {
-                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
+                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100)
+                    .expect("Failed to create TwoStageDrain");
                 for line in &lines {
                     drain.process_line(line.clone()).unwrap();
                 }
@@ -209,14 +223,16 @@ fn benchmark_query_on_two_stage_drain_data(c: &mut Criterion) {
     let seed = 42;
     let lines = generate_log_lines(line_count, seed);
 
-    let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
+    let mut drain =
+        TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
     for line in &lines {
         drain.process_line(line.clone()).unwrap();
     }
     let log_groups = drain.collect_all_log_groups();
     let store = LogStore::from_log_groups(log_groups);
 
-    let target_group_id_opt = store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now())
+    let target_group_id_opt = store
+        .get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now())
         .iter()
         .find(|lg| !lg.get_examples().is_empty())
         .map(|lg| lg.id);
@@ -226,12 +242,18 @@ fn benchmark_query_on_two_stage_drain_data(c: &mut Criterion) {
         return;
     }
     let target_group_id = target_group_id_opt.unwrap();
-    
+
     let base_time = Utc::now() - ChronoDuration::milliseconds(line_count as i64 / 2);
 
     let time_ranges = [
-        (base_time - ChronoDuration::milliseconds(500), base_time + ChronoDuration::milliseconds(500)),
-        (base_time - ChronoDuration::milliseconds(100), base_time + ChronoDuration::milliseconds(100)),
+        (
+            base_time - ChronoDuration::milliseconds(500),
+            base_time + ChronoDuration::milliseconds(500),
+        ),
+        (
+            base_time - ChronoDuration::milliseconds(100),
+            base_time + ChronoDuration::milliseconds(100),
+        ),
         (base_time, base_time + ChronoDuration::milliseconds(50)),
     ];
 
@@ -241,7 +263,12 @@ fn benchmark_query_on_two_stage_drain_data(c: &mut Criterion) {
             &(*start_time, *end_time),
             |b, &(s, e)| {
                 b.iter(|| {
-                    query_log_range_aggregation(black_box(&store), black_box(target_group_id), black_box(s), black_box(e));
+                    query_log_range_aggregation(
+                        black_box(&store),
+                        black_box(target_group_id),
+                        black_box(s),
+                        black_box(e),
+                    );
                 });
             },
         );
