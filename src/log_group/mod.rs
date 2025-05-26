@@ -56,8 +56,18 @@ impl LogGroup {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn event(&self) -> &Record {
+    pub fn event(&self) -> &Record { // This is the original event/base_record
         &self.event
+    }
+
+    /// Returns a reference to the base record of the log group.
+    pub fn base_record(&self) -> &Record {
+        &self.event
+    }
+
+    /// Returns a slice of the example records in the log group.
+    pub fn examples(&self) -> &Vec<Record> {
+        &self.examples
     }
 
     /// Compare a record with this log group and identify positions which qualify as variables, returned as vector of [Wildcard]
