@@ -250,6 +250,7 @@ mod tests {
             .prop_map(|(selector, filter)| LogQlQuery { selector, filter })
     }
 
+
     // Combined strategy for log groups and a query based on those groups
     fn arb_log_groups_and_query() -> impl Strategy<Value = (Vec<LogGroup>, LogQlQuery)> {
         arb_log_store_data().prop_flat_map(|(groups, group_ids)| {
@@ -610,6 +611,7 @@ mod tests {
     proptest! {
         #[test]
         fn prop_execute_logql_query(
+
             (log_groups, query) in arb_log_groups_and_query()
         ) {
             let log_store = LogStore::from_log_groups(log_groups.clone()); // log_groups is already Vec<LogGroup>
@@ -617,6 +619,7 @@ mod tests {
 
             // The existing assertions rely on `log_groups` and `query` directly.
             // This part of the test logic does not need to change.
+
             let selected_group_ids_set: HashSet<Uuid> = match &query.selector {
                 StreamSelector::LogGroupIds(ids) => ids.iter().cloned().collect(),
             };
@@ -640,17 +643,17 @@ mod tests {
                 }
             }
 
-            for group in &log_groups { // log_groups is Vec<LogGroup>
+            for group in &log_groups {
                 if selected_group_ids_set.contains(&group.id) {
-                    let mut records_to_check = group.examples().clone();
-                    records_to_check.push(group.base_record().clone());
-
+                    let mut records_to_check = group.examples().clone(); // Clones Vec<Record>
+                    records_to_check.push(group.base_record().clone()); // Clones Record
                     for original_record in records_to_check {
                         let matches_filter = query.filter.as_ref().map_or(true, |f| original_record.to_string().contains(&f.contains));
                         if matches_filter {
                             prop_assert!(results.iter().any(|res_rec| res_rec.uid == original_record.uid),
                                          "Original record {} (content: '{}') from group {} matches filter but not found in results. Filter: {:?}", original_record.uid, original_record.to_string(), group.id, query.filter.as_ref().map(|f| &f.contains));
                         } else {
+                            // If it doesn't match the filter, it should not be in the results.
                             prop_assert!(!results.iter().any(|res_rec| res_rec.uid == original_record.uid),
                                          "Original record {} (content: '{}') from group {} does NOT match filter but IS found in results. Filter: {:?}", original_record.uid, original_record.to_string(), group.id, query.filter.as_ref().map(|f| &f.contains));
                         }
@@ -663,6 +666,7 @@ mod tests {
     proptest! {
         #[test]
         fn prop_query_log_range_aggregation_with_logql(
+
             (log_groups, query, time1, time2) in arb_log_groups_query_and_times()
         ) {
             let log_store = LogStore::from_log_groups(log_groups.clone()); // log_groups is Vec<LogGroup>
@@ -677,6 +681,7 @@ mod tests {
 
             for record_in_result in &results {
                 let mut record_belongs_to_a_selected_group = false;
+
                 for group in &log_groups { // log_groups is Vec<LogGroup>
                     if selected_group_ids_set.contains(&group.id) {
                         if group.base_record().uid == record_in_result.uid || group.examples().iter().any(|ex| ex.uid == record_in_result.uid) {
