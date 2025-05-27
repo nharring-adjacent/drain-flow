@@ -233,7 +233,7 @@ mod tests {
             random_ids_strategy,
             // Mix of valid and random
             (
-                subsequence(valid_ids, 0..valid_ids.len()),
+                subsequence(valid_ids.clone(), 0..valid_ids.len()),
                 prop_vec(Just(Uuid::new_v4()), 0..2usize)
             )
                 .prop_map(|(mut subset, mut random_guids)| {
