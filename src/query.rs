@@ -249,16 +249,15 @@ mod tests {
             .prop_map(|(selector, filter)| LogQlQuery { selector, filter })
     }
 
-
     // Combined strategy for log groups and a query based on those groups
     fn arb_log_groups_and_query() -> impl Strategy<Value = (Vec<LogGroup>, LogQlQuery)> {
-        arb_log_store_data().prop_flat_map(|(groups, group_ids)| {
-            (Just(groups), arb_logql_query(group_ids))
-        })
+        arb_log_store_data()
+            .prop_flat_map(|(groups, group_ids)| (Just(groups), arb_logql_query(group_ids)))
     }
 
     // Combined strategy for log groups, query, and time range
-    fn arb_log_groups_query_and_times() -> impl Strategy<Value = (Vec<LogGroup>, LogQlQuery, DateTime<Utc>, DateTime<Utc>)> {
+    fn arb_log_groups_query_and_times(
+    ) -> impl Strategy<Value = (Vec<LogGroup>, LogQlQuery, DateTime<Utc>, DateTime<Utc>)> {
         arb_log_store_data().prop_flat_map(|(groups, group_ids)| {
             (
                 Just(groups),

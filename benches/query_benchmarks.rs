@@ -1,10 +1,14 @@
 use chrono::{Duration as ChronoDuration, Utc}; // DateTime removed
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 // Removed unresolved import: use log_ql_playground_project::{...};
-use drain_flow::{ // Assuming these are the correct replacements from the local crate
-    query::{execute_logql_query, query_log_range_aggregation, LineFilter, LogQlQuery, LogStore, QuerySource, StreamSelector},
-    record::Record,
+use drain_flow::{
     log_group::LogGroup,
+    // Assuming these are the correct replacements from the local crate
+    query::{
+        execute_logql_query, query_log_range_aggregation, LineFilter, LogQlQuery, LogStore,
+        QuerySource, StreamSelector,
+    },
+    record::Record,
 };
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
