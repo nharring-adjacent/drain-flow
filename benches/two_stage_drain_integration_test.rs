@@ -11,6 +11,7 @@
 use anyhow::Result;
 use drain_flow::drains::two_stage_drain::TwoStageDrain; // Adjust path if necessary
 
+#[allow(dead_code)] // Suppress warning, as this is used by a test
 fn básico_drain_test_harness(lines: Vec<String>, expected_groups: usize) -> Result<()> {
     let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 10)?; // Using default values for now
 

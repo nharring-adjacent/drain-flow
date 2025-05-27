@@ -144,11 +144,10 @@ pub fn query_log_range_aggregation<'a>(
 mod tests {
     use super::*;
     use chrono::Duration as ChronoDuration;
-    use chrono::{TimeZone, Utc}; // Keep Utc, add TimeZone for later proptest use
+    use chrono::Utc; // Keep Utc, add TimeZone for later proptest use
     use proptest::collection::vec as prop_vec; // Added for proptest
     use proptest::prelude::*; // Added for proptest
     use proptest::sample::subsequence; // Added for subsequence
-    use rand::Rng;
     use std::collections::HashSet; // Added for proptest
     use std::thread::sleep;
     use std::time::Duration as StdDuration;
