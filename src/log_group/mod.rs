@@ -147,7 +147,7 @@ impl LogGroup {
             // Convert u64 seconds to i64. This is safe as long as the timestamp is not
             // extremely far in the future, which is a reasonable assumption for log events.
             let secs_i64 = secs_u64 as i64;
-            DateTime::from_timestamp(secs_i64, nanos).unwrap_or_else(|| Utc::now())
+            DateTime::from_timestamp(secs_i64, nanos).unwrap_or_else(Utc::now)
         })
     }
 }
@@ -157,7 +157,7 @@ impl fmt::Display for LogGroup {
         write!(
             f,
             "LogGroup ID: {}\nFirst Seen: {}\nEvent: {}\n{} examples and {} wildcards\n",
-            self.event.uid.to_string(), // Changed from serialize()
+            self.event.uid, // Changed from serialize()
             self.get_time(), // Changed from self.event.uid.get_time() to use the struct's method
             self.event,
             self.examples.len(),

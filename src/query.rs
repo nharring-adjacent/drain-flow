@@ -19,6 +19,12 @@ pub struct LogStore {
     log_groups: HashMap<Uuid, LogGroup>,
 }
 
+impl Default for LogStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LogStore {
     pub fn new() -> Self {
         Self {
@@ -127,7 +133,7 @@ pub fn query_log_range_aggregation<'a>(
     initial_records
         .into_iter()
         .filter(|record| {
-            record.uid.get_timestamp().map_or(false, |ts| {
+            record.uid.get_timestamp().is_some_and(|ts| {
                 let (secs_u64, nanos) = ts.to_unix();
                 let secs_i64 = secs_u64 as i64;
                 if let Some(timestamp) = DateTime::from_timestamp(secs_i64, nanos) {
