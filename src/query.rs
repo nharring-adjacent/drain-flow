@@ -250,6 +250,25 @@ mod tests {
             .prop_map(|(selector, filter)| LogQlQuery { selector, filter })
     }
 
+    // Combined strategy for log groups and a query based on those groups
+    fn arb_log_groups_and_query() -> impl Strategy<Value = (Vec<LogGroup>, LogQlQuery)> {
+        arb_log_store_data().prop_flat_map(|(groups, group_ids)| {
+            (Just(groups), arb_logql_query(group_ids))
+        })
+    }
+
+    // Combined strategy for log groups, query, and time range
+    fn arb_log_groups_query_and_times() -> impl Strategy<Value = (Vec<LogGroup>, LogQlQuery, DateTime<Utc>, DateTime<Utc>)> {
+        arb_log_store_data().prop_flat_map(|(groups, group_ids)| {
+            (
+                Just(groups),
+                arb_logql_query(group_ids),
+                arb_datetime_utc(),
+                arb_datetime_utc(),
+            )
+        })
+    }
+
     #[test]
     fn test_record_uuid_timestamp_extraction() {
         let record = Record::new("Test record for UUID and timestamp".to_string());
@@ -591,18 +610,20 @@ mod tests {
     proptest! {
         #[test]
         fn prop_execute_logql_query(
-            (log_groups, valid_group_ids) in arb_log_store_data(),
-            query in { let ids = valid_group_ids.clone(); arb_logql_query(ids) }
+            (log_groups, query) in arb_log_groups_and_query()
         ) {
-            let log_store = LogStore::from_log_groups(log_groups.clone());
+            let log_store = LogStore::from_log_groups(log_groups.clone()); // log_groups is already Vec<LogGroup>
             let results = execute_logql_query(&log_store, &query);
 
+            // The existing assertions rely on `log_groups` and `query` directly.
+            // This part of the test logic does not need to change.
             let selected_group_ids_set: HashSet<Uuid> = match &query.selector {
                 StreamSelector::LogGroupIds(ids) => ids.iter().cloned().collect(),
             };
 
             for record_in_result in &results {
                 let mut record_belongs_to_a_selected_group = false;
+                // log_groups is Vec<LogGroup> from arb_log_groups_and_query
                 for group in &log_groups {
                     if selected_group_ids_set.contains(&group.id) {
                         if group.base_record().uid == record_in_result.uid || group.examples().iter().any(|ex| ex.uid == record_in_result.uid) {
@@ -619,10 +640,10 @@ mod tests {
                 }
             }
 
-            for group in &log_groups {
+            for group in &log_groups { // log_groups is Vec<LogGroup>
                 if selected_group_ids_set.contains(&group.id) {
-                    let mut records_to_check = group.examples().clone(); // Clones Vec<Record>
-                    records_to_check.push(group.base_record().clone()); // Clones Record
+                    let mut records_to_check = group.examples().clone();
+                    records_to_check.push(group.base_record().clone());
 
                     for original_record in records_to_check {
                         let matches_filter = query.filter.as_ref().map_or(true, |f| original_record.to_string().contains(&f.contains));
@@ -630,7 +651,6 @@ mod tests {
                             prop_assert!(results.iter().any(|res_rec| res_rec.uid == original_record.uid),
                                          "Original record {} (content: '{}') from group {} matches filter but not found in results. Filter: {:?}", original_record.uid, original_record.to_string(), group.id, query.filter.as_ref().map(|f| &f.contains));
                         } else {
-                            // If it doesn't match the filter, it should not be in the results.
                             prop_assert!(!results.iter().any(|res_rec| res_rec.uid == original_record.uid),
                                          "Original record {} (content: '{}') from group {} does NOT match filter but IS found in results. Filter: {:?}", original_record.uid, original_record.to_string(), group.id, query.filter.as_ref().map(|f| &f.contains));
                         }
@@ -643,22 +663,21 @@ mod tests {
     proptest! {
         #[test]
         fn prop_query_log_range_aggregation_with_logql(
-            (log_groups, valid_group_ids) in arb_log_store_data(),
-            query in { let ids = valid_group_ids.clone(); arb_logql_query(ids) },
-            time1 in arb_datetime_utc(),
-            time2 in arb_datetime_utc()
+            (log_groups, query, time1, time2) in arb_log_groups_query_and_times()
         ) {
-            let log_store = LogStore::from_log_groups(log_groups.clone());
+            let log_store = LogStore::from_log_groups(log_groups.clone()); // log_groups is Vec<LogGroup>
             let (start_time, end_time) = if time1 <= time2 { (time1, time2) } else { (time2, time1) };
             let results = query_log_range_aggregation(&log_store, QuerySource::ByLogQl(query.clone()), start_time, end_time);
 
+            // The existing assertions rely on `log_groups`, `query`, `start_time`, `end_time` directly.
+            // This part of the test logic does not need to change.
             let selected_group_ids_set: HashSet<Uuid> = match &query.selector {
                 StreamSelector::LogGroupIds(ids) => ids.iter().cloned().collect(),
             };
 
             for record_in_result in &results {
                 let mut record_belongs_to_a_selected_group = false;
-                for group in &log_groups {
+                for group in &log_groups { // log_groups is Vec<LogGroup>
                     if selected_group_ids_set.contains(&group.id) {
                         if group.base_record().uid == record_in_result.uid || group.examples().iter().any(|ex| ex.uid == record_in_result.uid) {
                             record_belongs_to_a_selected_group = true;
@@ -678,7 +697,7 @@ mod tests {
                              "Record time {:?} for {} (content: '{}') is outside range [{:?}, {:?}]", record_time, record_in_result.uid, record_in_result.to_string(), start_time, end_time);
             }
 
-            for group in &log_groups {
+            for group in &log_groups { // log_groups is Vec<LogGroup>
                 if selected_group_ids_set.contains(&group.id) {
                     let mut records_to_check = group.examples().clone();
                     records_to_check.push(group.base_record().clone());
