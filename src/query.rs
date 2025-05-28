@@ -19,6 +19,12 @@ pub struct LogStore {
     log_groups: HashMap<Uuid, LogGroup>,
 }
 
+impl Default for LogStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LogStore {
     pub fn new() -> Self {
         Self {
@@ -127,7 +133,7 @@ pub fn query_log_range_aggregation<'a>(
     initial_records
         .into_iter()
         .filter(|record| {
-            record.uid.get_timestamp().map_or(false, |ts| {
+            record.uid.get_timestamp().is_some_and(|ts| {
                 let (secs_u64, nanos) = ts.to_unix();
                 let secs_i64 = secs_u64 as i64;
                 if let Some(timestamp) = DateTime::from_timestamp(secs_i64, nanos) {
@@ -144,11 +150,10 @@ pub fn query_log_range_aggregation<'a>(
 mod tests {
     use super::*;
     use chrono::Duration as ChronoDuration;
-    use chrono::{TimeZone, Utc}; // Keep Utc, add TimeZone for later proptest use
+    use chrono::Utc; // Keep Utc, add TimeZone for later proptest use
     use proptest::collection::vec as prop_vec; // Added for proptest
     use proptest::prelude::*; // Added for proptest
     use proptest::sample::subsequence; // Added for subsequence
-    use rand::Rng;
     use std::collections::HashSet; // Added for proptest
     use std::thread::sleep;
     use std::time::Duration as StdDuration;
@@ -250,16 +255,15 @@ mod tests {
             .prop_map(|(selector, filter)| LogQlQuery { selector, filter })
     }
 
-
     // Combined strategy for log groups and a query based on those groups
     fn arb_log_groups_and_query() -> impl Strategy<Value = (Vec<LogGroup>, LogQlQuery)> {
-        arb_log_store_data().prop_flat_map(|(groups, group_ids)| {
-            (Just(groups), arb_logql_query(group_ids))
-        })
+        arb_log_store_data()
+            .prop_flat_map(|(groups, group_ids)| (Just(groups), arb_logql_query(group_ids)))
     }
 
     // Combined strategy for log groups, query, and time range
-    fn arb_log_groups_query_and_times() -> impl Strategy<Value = (Vec<LogGroup>, LogQlQuery, DateTime<Utc>, DateTime<Utc>)> {
+    fn arb_log_groups_query_and_times(
+    ) -> impl Strategy<Value = (Vec<LogGroup>, LogQlQuery, DateTime<Utc>, DateTime<Utc>)> {
         arb_log_store_data().prop_flat_map(|(groups, group_ids)| {
             (
                 Just(groups),

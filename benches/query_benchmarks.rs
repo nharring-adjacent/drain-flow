@@ -1,19 +1,25 @@
-use chrono::{DateTime, Duration as ChronoDuration, Utc};
+use chrono::{Duration as ChronoDuration, Utc}; // DateTime removed
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use log_ql_playground_project::{
-    execute_logql_query, query_log_range_aggregation, LineFilter, LogGroup, LogQlQuery, LogStore,
-    QuerySource, Record, StreamSelector,
+// Removed unresolved import: use log_ql_playground_project::{...};
+use drain_flow::{
+    log_group::LogGroup,
+    // Assuming these are the correct replacements from the local crate
+    query::{
+        execute_logql_query, query_log_range_aggregation, LineFilter, LogQlQuery, LogStore,
+        QuerySource, StreamSelector,
+    },
+    record::Record,
 };
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use std::collections::VecDeque;
+// VecDeque removed: use std::collections::VecDeque;
 use uuid::Uuid; // Included as per prompt, though not used in this specific helper
 
 // Helper to create a LogStore with a specific number of groups and records
 fn setup_log_store(
     num_groups: usize,
     records_per_group: usize,
-    mut rng: &mut StdRng,
+    rng: &mut StdRng,
 ) -> (LogStore, Vec<Uuid>) {
     let mut log_groups = Vec::new();
     let mut group_ids = Vec::new();
@@ -21,7 +27,7 @@ fn setup_log_store(
         // Create a unique base record content for each group
         let base_record_content = format!(
             "Base record for group {} - {}",
-            Uuid::from_u128(rng.gen()),
+            Uuid::from_u128(rng.random()),
             i
         );
         let base_record = Record::new(base_record_content);
@@ -33,7 +39,7 @@ fn setup_log_store(
                 "Example record {} for group {} - {}",
                 j,
                 i,
-                Uuid::from_u128(rng.gen())
+                Uuid::from_u128(rng.random())
             );
             let record_str = if j % 2 == 0 {
                 format!("{} common_term_for_filtering", example_content)

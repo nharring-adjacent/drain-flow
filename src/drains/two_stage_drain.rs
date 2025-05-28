@@ -221,7 +221,7 @@ impl TwoStageDrain {
                 // but only if it's different from the specific token path (or if specific token is not a wildcard)
                 // This check avoids double-counting if record_tokens[current_depth] is already DRAIN_ASTERISK
                 let specific_token_is_wildcard =
-                    next_log_token_opt.map_or(false, |t| *t == *DRAIN_ASTERISK);
+                    next_log_token_opt.is_some_and(|t| *t == *DRAIN_ASTERISK);
                 if !specific_token_is_wildcard {
                     // only try wildcard if specific token wasn't already the wildcard
                     if let Some(wildcard_child_node) = children_map.get(&*DRAIN_ASTERISK) {
@@ -272,7 +272,7 @@ impl TwoStageDrain {
     }
 
     // Helper to find a log group by ID starting from a given node (immutable search)
-    fn find_log_group_in_node_by_id<'a>(node: &'a Node, group_id: Uuid) -> Option<&'a LogGroup> {
+    fn find_log_group_in_node_by_id(node: &Node, group_id: Uuid) -> Option<&LogGroup> {
         match &node.kind {
             NodeKind::Leaf(log_groups) => {
                 for lg in log_groups {

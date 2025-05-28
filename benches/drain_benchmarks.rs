@@ -33,21 +33,21 @@ fn generate_log_lines(count: usize, seed: u64) -> Vec<String> {
     for i in 0..count {
         let current_time = base_time + ChronoDuration::milliseconds(i as i64);
         // Add some random variation to status and message to create more diverse log groups
-        let status: usize = rng.gen_range(200..600);
-        let message_length: usize = rng.gen_range(5..20);
+        let status: usize = rng.random_range(200_usize..600_usize);
+        let message_length: usize = rng.random_range(5_usize..20_usize);
         const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
                                 abcdefghijklmnopqrstuvwxyz\
                                 0123456789";
         let message: String = (0..message_length)
             .map(|_| {
-                let idx = rng.gen_range(0..CHARSET.len());
+                let idx = rng.random_range(0_usize..CHARSET.len());
                 CHARSET[idx] as char
             })
             .collect();
 
         let template = RecordTemplate::Sendmail(Sendmail {
             ts: current_time.to_rfc3339(),
-            remote: format!("host{}.example.com", rng.gen_range(1..100)),
+            remote: format!("host{}.example.com", rng.random_range(1_usize..100_usize)),
             status,
             message,
         });
@@ -159,7 +159,7 @@ fn benchmark_query_on_single_layer_data(c: &mut Criterion) {
                 b.iter(|| {
                     query_log_range_aggregation(
                         black_box(&store),
-                        black_box(target_group_id),
+                        black_box(drain_flow::query::QuerySource::ById(target_group_id)),
                         black_box(s),
                         black_box(e),
                     );
@@ -265,7 +265,7 @@ fn benchmark_query_on_two_stage_drain_data(c: &mut Criterion) {
                 b.iter(|| {
                     query_log_range_aggregation(
                         black_box(&store),
-                        black_box(target_group_id),
+                        black_box(drain_flow::query::QuerySource::ById(target_group_id)),
                         black_box(s),
                         black_box(e),
                     );
