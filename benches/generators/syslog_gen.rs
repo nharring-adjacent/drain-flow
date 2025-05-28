@@ -1,3 +1,4 @@
+//! Generates realistic syslog messages, mimicking a diverse Linux system log (`/var/log/messages`).
 // Copyright Nicholas Harring. All rights reserved.
 //
 // This program is free software: you can redistribute it and/or modify it under
@@ -10,7 +11,7 @@
 
 use chrono::{DateTime, Duration, Utc};
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng, seq::SliceRandom};
+use rand::{Rng, SeedableRng, seq::SliceRandom, distributions::Alphanumeric};
 // use std::fmt::Write; // Not strictly needed with format! macro
 
 pub struct SyslogEntry {
@@ -283,13 +284,13 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, current_kernel_upt
         }
         "dockerd" => {
             let level = ["info", "warn", "error"].choose(rng).unwrap_or(&"info");
-            let container_id_short: String = (0..12).map(|_| rng.sample(rand::distributions::Alphanumeric).to_string()).collect::<String>().to_lowercase();
+            let container_id_short: String = (0..12).map(|_| rng.sample(Alphanumeric) as char).collect::<String>().to_lowercase();
             let image_name = ["ubuntu:latest", "postgres:14-alpine", "nginx:1.21", "custom_app:v1.2.3"].choose(rng).unwrap_or(&"unknown_image");
             let action = ["start", "stop", "create", "destroy", "pull", "health_status"].choose(rng).unwrap_or(&"event");
             
             match *action {
                 "start" => format!("level={} msg=\"Container {} ({}) started\" module=libcontainerd", level, container_id_short, image_name),
-                "stop" => format!("level={} msg=\"Container {} ({}) stopped with exit code {}\" module=libcontainerd", level, container_id_short, image_name, rng.gen_range(0..1)),
+                "stop" => format!("level={} msg=\"Container {} ({}) stopped with exit code {}\" module=libcontainerd", level, container_id_short, image_name, rng.gen_range(0..=1)), // Inclusive range for 0 or 1
                 "pull" => format!("level={} msg=\"Pulling fs layer\" image={} layer=fs{}", level, image_name, rng.gen_range(1..5)),
                 "health_status" => format!("level={} msg=\"Health check failed\" container={} status=unhealthy error=\"timeout after 30s\"", level, container_id_short),
                 _ => format!("level={} msg=\"API listen on /var/run/docker.sock\" module=daemon", level),
@@ -299,7 +300,7 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, current_kernel_upt
             let level_char = ["I", "W", "E", "F"].choose(rng).unwrap_or(&"I"); // Klog style
             let pod_name = format!("{}-{}-{}", ["frontend", "backend", "worker", "cache"].choose(rng).unwrap_or(&"app"), 
                                             ["blue", "green", "prod", "dev"].choose(rng).unwrap_or(&"prod"), 
-                                            (0..5).map(|_| rng.sample(rand::distributions::Alphanumeric).to_string()).collect::<String>().to_lowercase());
+                                            (0..5).map(|_| rng.sample(Alphanumeric) as char).collect::<String>().to_lowercase());
             let namespace = ["default", "kube-system", "production", "monitoring"].choose(rng).unwrap_or(&"default");
             let component = ["kubelet.go", "pleg.go", "volume_manager.go", "prober.go"].choose(rng).unwrap_or(&"kubelet.go");
             let line_num = rng.gen_range(100..2000);

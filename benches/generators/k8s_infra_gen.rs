@@ -1,3 +1,4 @@
+//! Generates realistic klog-formatted logs for Kubernetes infrastructure components (e.g., Kubelet, API server).
 // Copyright Nicholas Harring. All rights reserved.
 //
 // This program is free software: you can redistribute it and/or modify it under

@@ -15,12 +15,8 @@ pub mod mysql_gen;
 pub mod rails_gen;
 pub mod syslog_gen;
 
-// Re-export the main generation functions from each module
-pub use k8s_infra_gen::generate_k8s_infra_logs;
-pub use k8s_mesh_gen::generate_k8s_mesh_logs;
-pub use mysql_gen::generate_mysql_slow_query_logs;
-pub use rails_gen::generate_rails_app_logs;
-pub use syslog_gen::generate_syslog_messages;
+// Re-exports were removed as per request.
+// The public API for generators is now directly via their modules, e.g., generators::mysql_gen::generate_mysql_slow_query_logs
 
 // Old code (RecordTemplate, Json, NGINXAccess, etc., LogGenerator) has been removed.
 // Unused imports (HashMap, TinyTemplate, anyhow::Error, serde_derive) have been removed.

@@ -1,3 +1,4 @@
+//! Generates realistic JSON-formatted logs for Kubernetes service mesh traffic (e.g., Istio, Linkerd, Nginx Ingress).
 // Copyright Nicholas Harring. All rights reserved.
 //
 // This program is free software: you can redistribute it and/or modify it under

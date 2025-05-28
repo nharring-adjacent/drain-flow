@@ -1,3 +1,4 @@
+//! Generates realistic MySQL slow query log entries.
 // Copyright Nicholas Harring. All rights reserved.
 //
 // This program is free software: you can redistribute it and/or modify it under
@@ -11,6 +12,7 @@
 use chrono::{DateTime, Duration, Utc};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+// Removed SampleRange import as Rng should provide random_range and random_bool
 
 const USERS: &[&str] = &["root", "app_user", "backup_user", "etl_process"];
 const HOSTS: &[&str] = &["db_primary.example.com", "db_replica_1.example.com", "analytics_db.example.com"];
@@ -66,15 +68,19 @@ pub fn generate_mysql_slow_query_logs(count: usize, seed: u64) -> Vec<String> {
     let mut current_time = Utc::now();
 
     for i in 0..count {
-        let user = USERS[rng.gen_range(0..USERS.len())].to_string();
-        let host = HOSTS[rng.gen_range(0..HOSTS.len())].to_string();
-        let client_ip = CLIENT_IPS[rng.gen_range(0..CLIENT_IPS.len())].map(String::from);
-        let query = QUERIES[rng.gen_range(0..QUERIES.len())].to_string();
-
+        let user_index = rng.gen_range(0..USERS.len());
+        let user = USERS[user_index].to_string();
+        let host_index = rng.gen_range(0..HOSTS.len());
+        let host = HOSTS[host_index].to_string();
+        let client_ip_index = rng.gen_range(0..CLIENT_IPS.len());
+        let client_ip = CLIENT_IPS[client_ip_index].map(String::from);
+        let query_index = rng.gen_range(0..QUERIES.len());
+        let query = QUERIES[query_index].to_string();
+        
         // Make query time somewhat correlated with query complexity (longer queries take more time)
         let query_complexity_factor = query.len();
         let base_query_time: f64 = rng.gen_range(0.1..2.0) + (query_complexity_factor as f64 / 100.0);
-        let is_slow_query: bool = rng.gen_bool(0.2); // 20% chance of being a "slow" query
+        let is_slow_query: bool = rng.gen_bool(0.2);
         let query_time = if is_slow_query {
             base_query_time * rng.gen_range(5.0..20.0) // Significantly longer for slow queries
         } else {

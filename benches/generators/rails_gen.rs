@@ -1,3 +1,4 @@
+//! Generates realistic Ruby on Rails application log entries, simulating request lifecycles.
 // Copyright Nicholas Harring. All rights reserved.
 //
 // This program is free software: you can redistribute it and/or modify it under
@@ -9,7 +10,7 @@
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
 use std::fmt;
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{Rng, SeedableRng, rngs::StdRng, distributions::Alphanumeric, seq::SliceRandom};
 use chrono::{Utc, Duration, SecondsFormat};
 use uuid::Uuid;
 
@@ -98,11 +99,11 @@ pub fn generate_rails_request_logs(seed: u64) -> Vec<String> {
     let mut current_time = Utc::now() - Duration::seconds(rng.gen_range(0..3600)); // Start some time in the past
 
     let request_id: String = Uuid::new_v4().to_string().chars().take(12).collect();
-    let method = HTTP_METHODS[rng.gen_range(0..HTTP_METHODS.len())].to_string();
-    let path = PATHS[rng.gen_range(0..PATHS.len())].to_string();
+    let method = HTTP_METHODS.choose(&mut rng).unwrap_or(&"GET").to_string();
+    let path = PATHS.choose(&mut rng).unwrap_or(&"/users").to_string();
     let ip_address = format!("192.168.{}.{}", rng.gen_range(0..256), rng.gen_range(1..255));
-    let controller = CONTROLLERS[rng.gen_range(0..CONTROLLERS.len())];
-    let action = ACTIONS[rng.gen_range(0..ACTIONS.len())];
+    let controller = CONTROLLERS.choose(&mut rng).unwrap_or(&"UsersController");
+    let action = ACTIONS.choose(&mut rng).unwrap_or(&"index");
     let controller_action = format!("{}#{}", controller, action);
     let pid = rng.gen_range(10000..30000);
 
@@ -111,7 +112,9 @@ pub fn generate_rails_request_logs(seed: u64) -> Vec<String> {
         let num_params = rng.gen_range(1..4);
         let mut param_map = String::from("{");
         for i in 0..num_params {
-            param_map.push_str(&format!("\"{}\"=>\"{}\"", PARAM_KEYS[rng.gen_range(0..PARAM_KEYS.len())], rng.gen_alnum::<char>().to_string()));
+            let param_key = PARAM_KEYS.choose(&mut rng).unwrap_or(&"default_param");
+            let param_value: String = (0..rng.gen_range(5..10)).map(|_| rng.sample(Alphanumeric) as char).collect();
+            param_map.push_str(&format!("\"{}\"=>\"{}\"", param_key, param_value));
             if i < num_params - 1 {
                 param_map.push_str(", ");
             }
@@ -167,7 +170,7 @@ pub fn generate_rails_request_logs(seed: u64) -> Vec<String> {
         let num_db_queries = rng.gen_range(1..=3);
         for _ in 0..num_db_queries {
             current_time += Duration::microseconds(rng.gen_range(200..10_000)); // DB queries can take longer
-            let db_action = DB_ACTIONS[rng.gen_range(0..DB_ACTIONS.len())];
+            let db_action = DB_ACTIONS.choose(&mut rng).unwrap_or(&"User Load");
             let db_time_ms = rng.gen_range(0.1..15.0) as f32; // Increased upper bound for DB time
             let query_example = match db_action {
                 "User Load" => "SELECT \"users\".* FROM \"users\" WHERE \"users\".\"id\" = ? LIMIT ?",
@@ -185,7 +188,7 @@ pub fn generate_rails_request_logs(seed: u64) -> Vec<String> {
         }
 
         current_time += Duration::microseconds(rng.gen_range(1000..20_000)); // View rendering
-        let template = TEMPLATES[rng.gen_range(0..TEMPLATES.len())];
+        let template = TEMPLATES.choose(&mut rng).unwrap_or(&"index.html.erb");
         let view_time_ms = rng.gen_range(5.0..150.0) as f32; // Increased view time
         logs.push(format_log_line(
             Severity::INFO,
@@ -239,7 +242,7 @@ pub fn generate_rails_request_logs(seed: u64) -> Vec<String> {
         ];
 
 
-        let chosen_error = error_descriptions[rng.gen_range(0..error_descriptions.len())];
+        let chosen_error = error_descriptions.choose(&mut rng).unwrap_or(&"NoMethodError: undefined method `foo' for nil:NilClass");
         current_time += Duration::microseconds(rng.gen_range(100..3000));
         logs.push(format_log_line(
             Severity::FATAL,
@@ -252,9 +255,9 @@ pub fn generate_rails_request_logs(seed: u64) -> Vec<String> {
         let num_backtrace_lines = rng.gen_range(2..=4);
         for _ in 0..num_backtrace_lines {
             current_time += Duration::microseconds(rng.gen_range(50..1500));
-            let file = backtrace_files[rng.gen_range(0..backtrace_files.len())];
+            let file = backtrace_files.choose(&mut rng).unwrap_or(&"app/controllers/application_controller.rb");
             let line_num = rng.gen_range(10..200);
-            let method = backtrace_methods[rng.gen_range(0..backtrace_methods.len())];
+            let method = backtrace_methods.choose(&mut rng).unwrap_or(&"unknown_method");
             logs.push(format_log_line(
                 Severity::FATAL, // Backtrace lines are typically FATAL in this context
                 &current_time,
