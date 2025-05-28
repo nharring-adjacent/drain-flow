@@ -8,99 +8,19 @@
 // Server Side Public License along with this program.
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
-use std::collections::HashMap;
+// Module declarations for the new generators
+pub mod k8s_infra_gen;
+pub mod k8s_mesh_gen;
+pub mod mysql_gen;
+pub mod rails_gen;
+pub mod syslog_gen;
 
-use anyhow::Error;
-use serde_derive::{Deserialize, Serialize};
-use tinytemplate::TinyTemplate;
+// Re-export the main generation functions from each module
+pub use k8s_infra_gen::generate_k8s_infra_logs;
+pub use k8s_mesh_gen::generate_k8s_mesh_logs;
+pub use mysql_gen::generate_mysql_slow_query_logs;
+pub use rails_gen::generate_rails_app_logs;
+pub use syslog_gen::generate_syslog_messages;
 
-#[derive(Serialize, Deserialize)]
-pub enum RecordTemplate {
-    Json(Json),
-    NGINXAccess(NGINXAccess),
-    Qmail(Qmail),
-    Sendmail(Sendmail),
-    SlowQuery(SlowQuery),
-    Syslog(Syslog),
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Json {
-    pub event_type: String,
-    pub callsite: String,
-    pub app_name: String,
-    pub headers: HashMap<String, String>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct NGINXAccess {
-    pub ts: String,
-    pub client: String,
-    pub method: String,
-    pub status: usize,
-    pub bytes: usize,
-    pub path: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Qmail;
-
-#[derive(Serialize, Deserialize)]
-pub struct Sendmail {
-    pub ts: String,
-    pub remote: String,
-    pub status: usize,
-    pub message: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SlowQuery {
-    pub ts: String,
-    pub db: String,
-    pub op: String,
-    pub duration: String,
-    pub index: String,
-    pub scanned: usize,
-    pub found: usize,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Syslog {
-    pub ts: String,
-    pub facility: String,
-    pub severity: String,
-}
-
-const NGINX_TEMPLATE: &str = "{ foo }";
-const QMAIL_TEMPLATE: &str = "{ foo }";
-const SENDMAIL_TEMPLATE: &str =
-    "{ ts } Sent to { remote } with status: { status }, remote said { message }";
-const SLOW_QUERY_TEMPLATE: &str = "{ foo }";
-const SYSLOG_TEMPLATE: &str = "{ foo }";
-
-pub struct LogGenerator<'a> {
-    tiny: TinyTemplate<'a>,
-}
-
-impl LogGenerator<'_> {
-    pub fn new() -> Result<Self, Error> {
-        let mut tt = TinyTemplate::new();
-        tt.add_template("nginx", NGINX_TEMPLATE)?;
-        tt.add_template("qmail", QMAIL_TEMPLATE)?;
-        tt.add_template("sendmail", SENDMAIL_TEMPLATE)?;
-        tt.add_template("slowquery", SLOW_QUERY_TEMPLATE)?;
-        tt.add_template("syslog", SYSLOG_TEMPLATE)?;
-        Ok(Self { tiny: tt })
-    }
-
-    pub fn make_record(&self, template: RecordTemplate) -> String {
-        match template {
-            RecordTemplate::Json(j) => serde_json::to_string(&j).expect(""),
-            RecordTemplate::NGINXAccess(n) => self.tiny.render("nginx", &n).expect(""),
-            RecordTemplate::Qmail(q) => self.tiny.render("qmail", &q).expect(""),
-            RecordTemplate::Sendmail(s) => self.tiny.render("sendmail", &s).expect(""),
-            RecordTemplate::SlowQuery(sq) => self.tiny.render("slowquery", &sq).expect(""),
-            RecordTemplate::Syslog(s) => self.tiny.render("syslog", &s).expect(""),
-        }
-    }
-}
+// Old code (RecordTemplate, Json, NGINXAccess, etc., LogGenerator) has been removed.
+// Unused imports (HashMap, TinyTemplate, anyhow::Error, serde_derive) have been removed.
