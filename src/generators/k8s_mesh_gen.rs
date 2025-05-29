@@ -9,9 +9,10 @@
 // Server Side Public License along with this program.
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
-use rand::{Rng, SeedableRng, seq::SliceRandom, rngs::StdRng};
-use chrono::{Utc, DateTime, Duration, SecondsFormat};
+use rand::{Rng, SeedableRng, rngs::StdRng}; // SliceRandom removed
+use chrono::{Utc, Duration, SecondsFormat}; // DateTime removed
 use serde::Serialize;
+use serde_derive::Serialize as _; // Import the derive macro. Alias to avoid conflict.
 use serde_json;
 use uuid::Uuid;
 

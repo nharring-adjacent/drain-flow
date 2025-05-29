@@ -366,5 +366,3 @@ pub fn generate_syslog_messages(count: usize, seed: u64) -> Vec<String> {
     }
     logs
 }
-
-[end of benches/generators/syslog_gen.rs]

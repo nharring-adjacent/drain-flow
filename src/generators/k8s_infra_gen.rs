@@ -103,7 +103,7 @@ fn generate_k8s_object(kind: Option<&str>, ns: Option<&str>, name_prefix: Option
     let actual_ns = ns.unwrap_or_else(|| NAMESPACES.choose(rng).unwrap_or(&"default"));
     let actual_name = format!("{}-{}",
         name_prefix.unwrap_or_else(|| POD_NAMES.choose(rng).unwrap_or(&"app")),
-        rng.gen_range(10000..99999)
+        rng.random_range(10000..99999)
     );
     K8sObjectRef::new(actual_kind, actual_ns, &actual_name, rng)
 }
@@ -115,7 +115,7 @@ fn generate_message_for_component(component: &str, level: LogLevel, rng: &mut St
     let image_name = CONTAINER_IMAGE_NAMES.choose(rng).unwrap_or(&"unknown-image");
     let error_msg = ERROR_MESSAGES.choose(rng).unwrap_or(&"unknown error");
     let user = USERS.choose(rng).unwrap_or(&"system:unknown");
-    let groups_vec: Vec<&&str> = GROUPS.iter().filter(|_| rng.gen_bool(0.3)).collect(); // Select some groups
+    let groups_vec: Vec<&&str> = GROUPS.iter().filter(|_| rng.random_bool(0.3)).collect(); // Select some groups
     let groups_str = groups_vec.iter().map(|s| s.to_string()).collect::<Vec<String>>().join(",");
     let webhook_name = WEBHOOK_NAMES.choose(rng).unwrap_or(&"unknown-webhook");
     let controller_name = CONTROLLER_NAMES.choose(rng).unwrap_or(&"UnknownController");
@@ -133,7 +133,7 @@ fn generate_message_for_component(component: &str, level: LogLevel, rng: &mut St
                     format!("\"Adding pod to network\" pod=\"{}\"", pod_obj.to_namespaced_name()),
                     format!("\"Updating status for pod\" pod=\"{}\" status={{phase: \"Running\", conditions: [...]}}", pod_obj.to_namespaced_name()),
                     format!("\"Starting kubelet\" version=\"v1.25.3\" node=\"{}\"", node_name),
-                    format!("\"Image GC completed\" images_deleted={} bytes_reclaimed={}", rng.gen_range(0..5), rng.gen_range(0..1024*1024*500)),
+                    format!("\"Image GC completed\" images_deleted={} bytes_reclaimed={}", rng.random_range(0..5), rng.random_range(0..1024*1024*500)),
                     format!("\"PLEG: pod final state arrived\" podID=\"{}\"", pod_obj.uid),
                 ];
                 messages.choose(rng).unwrap_or(&"Default Kubelet Info".to_string()).to_string()
@@ -183,7 +183,7 @@ fn generate_message_for_component(component: &str, level: LogLevel, rng: &mut St
                     format!("\"Attempting to schedule pod\" pod=\"{}\"", pod_obj.to_namespaced_name()),
                     format!("\"Successfully bound pod to node\" pod=\"{}\" node=\"{}\"", pod_obj.to_namespaced_name(), node_name),
                     format!("\"Starting Kubernetes scheduler\" version=\"v1.25.3\""),
-                    format!("\"Found N preemption victims\" count={}", rng.gen_range(1..5)),
+                    format!("\"Found N preemption victims\" count={}", rng.random_range(1..5)),
                 ];
                 messages.choose(rng).unwrap_or(&"Default Scheduler Info".to_string()).to_string()
             }
@@ -199,23 +199,23 @@ fn generate_message_for_component(component: &str, level: LogLevel, rng: &mut St
         },
         "etcd" => match level { // etcd logs are often simpler, more direct
             LogLevel::Info => {
-                let from_id = format!("{:x}", rng.gen::<u64>());
-                let to_id = format!("{:x}", rng.gen::<u64>());
-                let proposal_id = format!("{:x}", rng.gen::<u64>());
+                let from_id = format!("{:x}", rng.random::<u64>());
+                let to_id = format!("{:x}", rng.random::<u64>());
+                let proposal_id = format!("{:x}", rng.random::<u64>());
                 let messages = [
                     format!("\"leader changed\" from=\"{}\" to=\"{}\"", from_id, to_id),
-                    format!("\"applied proposal\" id=\"{}\" size=\"{} bytes\"", proposal_id, rng.gen_range(100..5000)),
+                    format!("\"applied proposal\" id=\"{}\" size=\"{} bytes\"", proposal_id, rng.random_range(100..5000)),
                     format!("\"starting etcd server\" version=\"3.5.4\" data-dir=\"/var/lib/etcd\""),
-                    format!("\"publish attributes\" local_id={} term={}", from_id, rng.gen_range(1..10)),
+                    format!("\"publish attributes\" local_id={} term={}", from_id, rng.random_range(1..10)),
                 ];
                 messages.choose(rng).unwrap_or(&"Default etcd Info".to_string()).to_string()
             }
             LogLevel::Warning | LogLevel::Error => {
                  let messages = [
-                    format!("\"failed to reach quorum\" current_peers={}", rng.gen_range(1..3)),
-                    format!("\"slow fdatasync\" duration=\"{}ms\"", rng.gen_range(100..2000)),
-                    format!("\"apply request took too long\" duration=\"{}ms\"", rng.gen_range(500..3000)),
-                    format!("\"connection refused from\" remote_peer_id=\"{:x}\"", rng.gen::<u64>()),
+                    format!("\"failed to reach quorum\" current_peers={}", rng.random_range(1..3)),
+                    format!("\"slow fdatasync\" duration=\"{}ms\"", rng.random_range(100..2000)),
+                    format!("\"apply request took too long\" duration=\"{}ms\"", rng.random_range(500..3000)),
+                    format!("\"connection refused from\" remote_peer_id=\"{:x}\"", rng.random::<u64>()),
                 ];
                 messages.choose(rng).unwrap_or(&"Default etcd Error".to_string()).to_string()
             }
@@ -244,7 +244,7 @@ fn generate_message_for_component(component: &str, level: LogLevel, rng: &mut St
         "kube-proxy" => match level {
             LogLevel::Info => {
                 let messages = [
-                    format!("\"Syncing iptables rules\" rule_count={}", rng.gen_range(100..5000)),
+                    format!("\"Syncing iptables rules\" rule_count={}", rng.random_range(100..5000)),
                     format!("\"Successfully synced service\" service=\"{}\"", item_key),
                     format!("\"Starting Kubernetes kube-proxy\" version=\"v1.25.3\""),
                     format!("\"Detected new service\" service=\"{}\"", item_key),
@@ -269,7 +269,7 @@ fn generate_message_for_component(component: &str, level: LogLevel, rng: &mut St
 pub fn generate_k8s_infra_logs(count: usize, seed: u64) -> Vec<String> {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut logs = Vec::with_capacity(count);
-    let mut current_time = Utc::now() - Duration::days(rng.gen_range(1..3)); // Start up to 3 days ago
+    let mut current_time = Utc::now() - Duration::days(rng.random_range(1..3)); // Start up to 3 days ago
 
     let components_files: Vec<(&str, &[&str])> = vec![
         ("kubelet", KUBELET_FILES),
@@ -293,14 +293,14 @@ pub fn generate_k8s_infra_logs(count: usize, seed: u64) -> Vec<String> {
         .collect();
 
     for _i in 0..count {
-        current_time += Duration::milliseconds(rng.gen_range(10..2000)); // Increment time
+        current_time += Duration::milliseconds(rng.random_range(10..2000)); // Increment time
 
         let (component_name, file_options) = components_files.choose(&mut rng).unwrap();
         let file_line = file_options.choose(&mut rng).unwrap_or(&"unknown.go:0").to_string();
         let log_level = *levels.choose(&mut rng).unwrap_or(&LogLevel::Info);
         
         let message = generate_message_for_component(component_name, log_level, &mut rng);
-        let thread_id = if rng.gen_bool(0.9) { 1 } else { rng.gen_range(2..20) }; // Most logs from thread 1
+        let thread_id = if rng.random_bool(0.9) { 1 } else { rng.random_range(2..20) }; // Most logs from thread 1
 
         logs.push(format_klog_entry(
             log_level,
