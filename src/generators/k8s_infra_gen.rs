@@ -133,7 +133,7 @@ fn generate_message_for_component(component_name: &str, level: LogLevel, rng: &m
                     format!("\"Failed to update node status\" err=\"timeout attempting to reach API server: {}\"", error_msg_snippet),
                     format!("\"Container runtime network not ready\" networkReady=\"false\" message=\"{}\"", error_msg_snippet),
                     format!("\"Eviction manager: attempting to reclaim\" resourceName=\"memory\""),
-                    format!("\"PLEG is not healthy: pleg was last seen active {}, but is now {}", Duration::seconds(rng.random_range(60..300)).as_secs(), Duration::seconds(rng.random_range(5..59)).as_secs()),
+                    format!("\"PLEG is not healthy: pleg was last seen active {}, but is now {}", Duration::seconds(rng.random_range(60..300)).num_seconds(), Duration::seconds(rng.random_range(5..59)).num_seconds()),
                 ];
                 messages.choose(rng).unwrap_or(&"Default Kubelet Error".to_string()).to_string()
             }
