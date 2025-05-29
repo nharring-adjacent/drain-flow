@@ -12,9 +12,7 @@
 
 use chrono::{DateTime, Duration, Utc};
 use rand::{Rng, SeedableRng, rngs::StdRng};
-use rand::prelude::IndexedRandom; // For .choose()
-// Removed: use rand::seq::SliceRandom; // As per compiler warnings and IndexedRandom preference
-// Removed: use rand::distributions::Alphanumeric; // Will use CHARSET method if needed
+use rand::prelude::IndexedRandom; 
 
 // Constants for generating varied log messages
 const HOSTNAMES: &[&str] = &["primary-server", "backup-server", "app-vm-01", "db-node-3", "utility-box"];
@@ -23,7 +21,6 @@ const APP_NAMES: &[&str] = &[
     "postfix", "custom_script", "samba", "nfsd", "dockerd", "kubelet", "vector-agent"
 ];
 
-// CRON
 const CRON_USERS: &[&str] = &["root", "admin", "backup_user", "app_service"];
 const CRON_COMMANDS: &[&str] = &[
     "/usr/local/bin/backup_script.sh", 
@@ -32,12 +29,10 @@ const CRON_COMMANDS: &[&str] = &[
     "/opt/app/bin/cleanup_sessions"
 ];
 
-// systemd
 const SYSTEMD_SERVICES: &[&str] = &["apache2.service", "mysql.service", "network.target", "docker.service", "cron.service", "unattended-upgrades.service"];
 const SYSTEMD_ACTIONS: &[&str] = &["Starting", "Started", "Stopping", "Stopped", "Reached target", "Failed to start"];
 const SYSTEMD_TARGETS: &[&str] = &["multi-user.target", "graphical.target", "network-online.target"];
 
-// sshd
 const SSH_USERS: &[&str] = &["admin_user", "dev_ops", "service_account", "test_user", "invalid_user"];
 const SSH_IPS: &[&str] = &["192.168.1.101", "10.0.2.15", "203.0.113.45", "172.17.0.1"];
 const SSH_RSA_FINGERPRINTS: &[&str] = &[
@@ -45,7 +40,6 @@ const SSH_RSA_FINGERPRINTS: &[&str] = &[
     "SHA256:XyzAbcDefGhiJklMnoPqrStuVwxYz9876543210xyz"
 ];
 
-// kernel
 const KERNEL_MSG_TEMPLATES: &[&str] = &[
     "nf_conntrack: nf_conntrack: table full, dropping packet",
     "usb {usb_bus}-{usb_port}: new {usb_speed}-speed USB device number {device_num} using {usb_driver}",
@@ -67,28 +61,22 @@ const ATA_ID: &[&str] = &["1", "2", "3", "4"];
 const ATA_CMD: &[&str] = &["READ FPDMA QUEUED", "WRITE FPDMA QUEUED", "SET FEATURES"];
 const INPUT_DEVICE_NAME: &[&str] = &["Power Button", "Sleep Button", "AT Translated Set 2 keyboard", "VirtualBox mouse integration"];
 
-
-// ntpd
 const NTP_ACTIONS: &[&str] = &["synchronized to", "offset", "delay", "jitter", "poll"];
 const NTP_SERVERS: &[&str] = &["time.google.com", "pool.ntp.org", "192.168.1.1", "ntp.example.internal"];
 
-// named
 const DOMAINS: &[&str] = &["example.com", "internal.lan", "google.com", "app.prod.local"];
 const RECORD_TYPES: &[&str] = &["A", "AAAA", "MX", "CNAME", "TXT", "SRV"];
 
-// postfix
 const POSTFIX_QUEUE_IDS: &[&str] = &["A1B2C3D4E5", "F6G7H8I9J0", "K1L2M3N4O5", "NOQUEUE"];
 const POSTFIX_EMAILS: &[&str] = &["user@example.com", "admin@internal.lan", "test@test.com", "bounce@example.org"];
 const POSTFIX_RELAYS: &[&str] = &["mail.isp.com", "smtp.google.com", "internal-relay.lan"];
 const POSTFIX_DSN: &[&str] = &["2.0.0", "4.4.1", "5.1.1"];
 const POSTFIX_STATUS: &[&str] = &["sent", "deferred", "bounced"];
 
-// custom_script
 const CUSTOM_SCRIPT_NAMES: &[&str] = &["backup.sh", "cleanup.py", "monitor_load.pl", "sync_data.rb"];
 const CUSTOM_SCRIPT_IDS: &[&str] = &["task_123", "job_abc", "process_xyz", "item_789"];
 const CUSTOM_SCRIPT_ERRORS: &[&str] = &["E_TIMEOUT", "E_DISK_FULL", "E_PERM_DENIED", "E_CONFIG_MISSING"];
 const CUSTOM_SCRIPT_VALUES: &[&str] = &["true", "false", "0", "1024", "/mnt/data", "completed"];
-// Define SYSLOG_PARAM_KEYS for syslog_gen.rs, distinct from rails_gen.rs PARAM_KEYS
 const SYSLOG_PARAM_KEYS: &[&str] = &["service_status", "event_code", "user_id", "path", "duration_sec"];
 
 
@@ -178,20 +166,20 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
             message = message.replace("{cpu_id}", &rng.random_range(0..4).to_string());
             message = message.replace("{hex_val}", &format!("{:x}", rng.random_range(1..16)));
             message = message.replace("{ts_float}", &format!("{}.{}", current_wall_time.timestamp(), current_wall_time.timestamp_subsec_micros()));
-            message = message.replace("{status}", if *(*["DENIED", "ALLOWED"].choose(rng).unwrap_or(&"DENIED")) == "DENIED" {"DENIED"} else {"ALLOWED"});
-            message = message.replace("{op}", (*["open", "connect", "mkdir"].choose(rng).unwrap_or(&"open")));
-            message = message.replace("{profile}", (*["/usr/sbin/sssd", "snap.docker.dockerd"].choose(rng).unwrap_or(&"/usr/sbin/sssd")));
-            message = message.replace("{name}", (*["/etc/krb5.keytab", "/var/log/messages"].choose(rng).unwrap_or(&"/etc/krb5.keytab")));
+            message = message.replace("{status}", if *(*["DENIED", "ALLOWED"].choose(rng).unwrap_or(&"DENIED")) == *"DENIED" {"DENIED"} else {"ALLOWED"}); // Corrected comparison
+            message = message.replace("{op}", *["open", "connect", "mkdir"].choose(rng).unwrap_or(&"open"));
+            message = message.replace("{profile}", *["/usr/sbin/sssd", "snap.docker.dockerd"].choose(rng).unwrap_or(&"/usr/sbin/sssd"));
+            message = message.replace("{name}", *["/etc/krb5.keytab", "/var/log/messages"].choose(rng).unwrap_or(&"/etc/krb5.keytab"));
             message = message.replace("{pid_val}", &rng.random_range(100..99999).to_string());
-            message = message.replace("{comm}", (*["sssd_be", "dockerd", "anacron"].choose(rng).unwrap_or(&"sssd_be")));
-            message = message.replace("{req_mask}", (*["r", "rw", "w"].choose(rng).unwrap_or(&"r")));
-            message = message.replace("{den_mask}", (*["r", "w"].choose(rng).unwrap_or(&"r")));
+            message = message.replace("{comm}", *["sssd_be", "dockerd", "anacron"].choose(rng).unwrap_or(&"sssd_be"));
+            message = message.replace("{req_mask}", *["r", "rw", "w"].choose(rng).unwrap_or(&"r"));
+            message = message.replace("{den_mask}", *["r", "w"].choose(rng).unwrap_or(&"r"));
             message = message.replace("{fsuid}", &rng.random_range(0..1000).to_string());
             message = message.replace("{ouid}", &rng.random_range(0..1000).to_string());
             message = message.replace("{ata_id}", ATA_ID.choose(rng).unwrap_or(&"1"));
             message = message.replace("{ata_cmd}", ATA_CMD.choose(rng).unwrap_or(&"READ FPDMA QUEUED"));
             message = message.replace("{bytes}", &rng.random_range(128..1024).to_string());
-            message = message.replace("{device}", (*["sda1", "nvme0n1p2", "vda"].choose(rng).unwrap_or(&"sda1")));
+            message = message.replace("{device}", *["sda1", "nvme0n1p2", "vda"].choose(rng).unwrap_or(&"sda1"));
             message = message.replace("{input_device_name}", INPUT_DEVICE_NAME.choose(rng).unwrap_or(&"Unknown Input Device"));
             message = message.replace("{input_id}", &rng.random_range(10..30).to_string());
             message = message.replace("{port_num}", &rng.random_range(1..10).to_string());
@@ -202,18 +190,18 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
             format!("{}{}", base_msg, message)
         }
         "ntpd" => {
-            let action = NTP_ACTIONS.choose(rng).unwrap_or(&"synchronized to");
-            match *action { // Dereference here
+            let action_ref = NTP_ACTIONS.choose(rng).unwrap_or(&"synchronized to");
+            match *action_ref { 
                 "synchronized to" => {
                     let server_ip = NTP_SERVERS.choose(rng).unwrap_or(&"unknown.server");
                     let stratum = rng.random_range(1..5);
-                    format!("{} NTP server ({}) at stratum {}", action, server_ip, stratum)
+                    format!("{} NTP server ({}) at stratum {}", action_ref, server_ip, stratum)
                 }
                 "offset" | "delay" | "jitter" | "poll" => {
                     let val = rng.random_range(0.001..0.5) as f64;
-                    format!("{} {:.6} sec", action, val)
+                    format!("{} {:.6} sec", action_ref, val)
                 }
-                _ => format!("{} some_value", action),
+                _ => format!("{} some_value", action_ref),
             }
         }
         "named" => {
@@ -248,32 +236,32 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
                     let delay = rng.random_range(0.1..15.0) as f32; 
                     let (d1, d2, d3, d4) = (delay*rng.random_range(0.0..0.2), delay*rng.random_range(0.1..0.3), delay*rng.random_range(0.2..0.5), delay*rng.random_range(0.3..0.7)); 
                     let dsn_val = POSTFIX_DSN.choose(rng).unwrap_or(&"2.0.0");
-                    let status_val = POSTFIX_STATUS.choose(rng).unwrap_or(&"sent");
-                    let reason = if *status_val != "sent" { 
+                    let status_val_ref = POSTFIX_STATUS.choose(rng).unwrap_or(&"sent");
+                    let reason = if *status_val_ref != "sent" { 
                         format!("(host {} said: {} {} - some_error_code)", relay_srv, rng.random_range(400..599), POSTFIX_EMAILS.choose(rng).unwrap_or(&"unknown"))
                     } else { 
                         "message accepted for delivery".to_string() 
                     };
                     format!("{}: to=<{}>, relay={}[{}]:{}, delay={:.1}, delays={:.1}/{:.1}/{:.1}/{:.1}, dsn={}, status={} ({})",
-                        qid, to_email, relay_srv, relay_ip, relay_port, delay, d1, d2, d3, d4, dsn_val, status_val, reason)
+                        qid, to_email, relay_srv, relay_ip, relay_port, delay, d1, d2, d3, d4, dsn_val, status_val_ref, reason)
                 }
             }
         }
         "custom_script" => {
             let script_name = CUSTOM_SCRIPT_NAMES.choose(rng).unwrap_or(&"generic.sh");
-            let level = *["INFO", "WARN", "DEBUG", "ERROR"].choose(rng).unwrap_or(&"INFO"); // Dereference here
+            let level_ref = ["INFO", "WARN", "DEBUG", "ERROR"].choose(rng).unwrap_or(&"INFO"); 
             let item_id = CUSTOM_SCRIPT_IDS.choose(rng).unwrap_or(&"item_unknown");
-            match level { // Now level is &str
-                "INFO" => format!("{}: [{}] Processing item {}.", level, script_name, item_id),
-                "WARN" => format!("{}: [{}] Item {} has a minor issue.", level, script_name, item_id),
+            match *level_ref { 
+                "INFO" => format!("{}: [{}] Processing item {}.", level_ref, script_name, item_id),
+                "WARN" => format!("{}: [{}] Item {} has a minor issue.", level_ref, script_name, item_id),
                 "DEBUG" => {
-                    let param = SYSLOG_PARAM_KEYS.choose(rng).unwrap_or(&"config_param"); // Use SYSLOG_PARAM_KEYS
+                    let param = SYSLOG_PARAM_KEYS.choose(rng).unwrap_or(&"config_param"); 
                     let value = CUSTOM_SCRIPT_VALUES.choose(rng).unwrap_or(&"default_val");
-                    format!("{}: [{}] Value of {} set to {}.", level, script_name, param, value)
+                    format!("{}: [{}] Value of {} set to {}.", level_ref, script_name, param, value)
                 },
-                _ => { // ERROR
+                _ => { 
                     let error = CUSTOM_SCRIPT_ERRORS.choose(rng).unwrap_or(&"E_UNKNOWN");
-                    format!("{}: [{}] Item {} failed with error: {}.", level, script_name, item_id, error)
+                    format!("{}: [{}] Item {} failed with error: {}.", level_ref, script_name, item_id, error)
                 }
             }
         }
@@ -296,10 +284,10 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
                 format!("lockd: server {} not responding, still trying", client_host)
             } else if rng.random_bool(0.3) {
                 let client_ip = SSH_IPS.choose(rng).unwrap_or(&"nfs.client.ip");
-                let reason = (*["access denied by server", "no_subtree_check", "sync error"].choose(rng).unwrap_or(&"unknown reason"));
+                let reason = *["access denied by server", "no_subtree_check", "sync error"].choose(rng).unwrap_or(&"unknown reason");
                 format!("mountd: refused mount request from {} for /exports/data ({})", client_ip, reason)
             } else {
-                let auth_flavor = (*["AUTH_NULL", "AUTH_SYS", "RPCSEC_GSS"].choose(rng).unwrap_or(&"AUTH_SYS"));
+                let auth_flavor = *["AUTH_NULL", "AUTH_SYS", "RPCSEC_GSS"].choose(rng).unwrap_or(&"AUTH_SYS");
                 format!("auth: unhandled client flavor {}", auth_flavor)
             }
         }
@@ -307,12 +295,12 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
             let level = DOCKERD_LEVELS.choose(rng).unwrap_or(&"info");
             let container_id_short: String = (0..12).map(|_| CHARSET[rng.random_range(0..CHARSET.len())] as char).collect();
             let image_name = DOCKERD_IMAGE_NAMES.choose(rng).unwrap_or(&"unknown_image");
-            let action = DOCKERD_ACTIONS.choose(rng).unwrap_or(&"event");
+            let action_ref = DOCKERD_ACTIONS.choose(rng).unwrap_or(&"event");
             
-            match *action { // Dereference here
-                "start" | "stop" | "create" | "destroy" => format!("level={} msg=\"Container {} {} {} ({})\"", level, container_id_short, action, image_name, DOCKERD_CONTAINER_ID_PREFIX.choose(rng).unwrap_or(&"abcdef")),
+            match *action_ref { 
+                "start" | "stop" | "create" | "destroy" => format!("level={} msg=\"Container {} {} {} ({})\"", level, container_id_short, action_ref, image_name, DOCKERD_CONTAINER_ID_PREFIX.choose(rng).unwrap_or(&"abcdef")),
                 "pull" => format!("level={} msg=\"Pulling fs layer\" image={} layer=fs{}", level, image_name, rng.random_range(1..5)),
-                _ => format!("level={} msg=\"Health status for container {} is {} \" module=libcontainerd status={}", level, container_id_short, image_name, rng.random_range(0..=1)),
+                _ => format!("level={} msg=\"Health status for container {} is {}\" module=libcontainerd status={}", level, container_id_short, image_name, rng.random_range(0..=1)),
             }
         }
         "kubelet" => {
@@ -327,12 +315,12 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
             let component = KUBELET_COMPONENTS.choose(rng).unwrap_or(&"kubelet.go");
             let line_num = rng.random_range(100..2000);
             
-            let event_type = KUBELET_EVENT_TYPES.choose(rng).unwrap_or(&"Event");
-            let message_body = match *event_type { // Dereference here
-                "SyncLoop" => format!("\"{}\" pod=\"{}/{}\" status=\"{}\"", event_type, namespace, pod_name, KUBELET_STATUS.choose(rng).unwrap_or(&"running")),
-                "PLEG" => format!("\"{}\" Error: {}, Details: {}", event_type, (*["FailedToGetContainerManager", "PodStopped"].choose(rng).unwrap_or(&"Error")), (*["rpc error: code = DeadlineExceeded", "container not found"].choose(rng).unwrap_or(&"details"))),
-                "Probe" => format!("\"{}\" pod=\"{}/{}\" probe=\"{}\" result=\"{}\"", event_type, namespace, pod_name, KUBELET_PROBE_TYPES.choose(rng).unwrap_or(&"Liveness"), KUBELET_PROBE_RESULTS.choose(rng).unwrap_or(&"Success")),
-                _ => format!("\"{}\" pod=\"{}/{}\" message=\"{}\"", event_type, namespace, pod_name, (*["Configuration changed", "Pod sandbox changed"].choose(rng).unwrap_or(&"message"))),
+            let event_type_ref = KUBELET_EVENT_TYPES.choose(rng).unwrap_or(&"Event");
+            let message_body = match *event_type_ref { 
+                "SyncLoop" => format!("\"{}\" pod=\"{}/{}\" status=\"{}\"", event_type_ref, namespace, pod_name, KUBELET_STATUS.choose(rng).unwrap_or(&"running")),
+                "PLEG" => format!("\"{}\" Error: {}, Details: {}", event_type_ref, (*["FailedToGetContainerManager", "PodStopped"].choose(rng).unwrap_or(&"Error")), (*["rpc error: code = DeadlineExceeded", "container not found"].choose(rng).unwrap_or(&"details"))),
+                "Probe" => format!("\"{}\" pod=\"{}/{}\" probe=\"{}\" result=\"{}\"", event_type_ref, namespace, pod_name, KUBELET_PROBE_TYPES.choose(rng).unwrap_or(&"Liveness"), KUBELET_PROBE_RESULTS.choose(rng).unwrap_or(&"Success")),
+                _ => format!("\"{}\" pod=\"{}/{}\" message=\"{}\"", event_type_ref, namespace, pod_name, (*["Configuration changed", "Pod sandbox changed"].choose(rng).unwrap_or(&"message"))),
             };
             format!("{} {} {:>7} {}:{}] {}", level_char, klog_ts, thread_id, component, line_num, message_body)
         }
@@ -340,7 +328,6 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
         _ => format!("Generic message for {} - ID: {}", app_name, rng.random::<u32>()),
     }
 }
-
 
 pub fn generate_syslog_messages(count: usize, seed: u64) -> Vec<String> {
     let mut rng = StdRng::seed_from_u64(seed);
