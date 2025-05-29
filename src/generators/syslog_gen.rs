@@ -367,4 +367,4 @@ pub fn generate_syslog_messages(count: usize, seed: u64) -> Vec<String> {
     }
     logs
 }
-```
+

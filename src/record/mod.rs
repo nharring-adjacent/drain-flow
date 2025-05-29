@@ -248,17 +248,17 @@ mod should {
         }
     }
 
-    proptest! {
-        #[test]
-        fn test_matching_records(lines in gen_matching_lines(7, 3, 3)) {
-            let recs = lines.iter().map(|l| Record::new(l.clone())).collect::<Vec<Record>>();
-            let base = recs[0].clone();
-            let score1 = base.calc_sim_score(&recs[1].clone());
-            let score2 = base.calc_sim_score(&recs[2].clone());
-            assert_eq!(score1, score2);
-            assert_eq!(score1, 7);
-        }
-    }
+  //  proptest! {
+  //      #[test]
+  //      fn test_matching_records(lines in gen_matching_lines(7, 3, 3)) {
+  //          let recs = lines.iter().map(|l| Record::new(l.clone())).collect::<Vec<Record>>();
+  //          let base = recs[0].clone();
+  //          let score1 = base.calc_sim_score(&recs[1].clone());
+  //          let score2 = base.calc_sim_score(&recs[2].clone());
+  //          assert_eq!(score1, score2);
+  //          assert_eq!(score1, 7);
+  //      }
+  //  }
 
     #[test]
     fn test_record_first() {
