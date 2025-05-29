@@ -14,13 +14,13 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 use rand::prelude::IndexedRandom; // For .choose()
 // Removed: use rand::seq::SliceRandom; 
 use chrono::{Utc, Duration, SecondsFormat};
-// serde::Serialize trait import removed as derive macro is sufficient and warning indicated it was unused
+use serde::Serialize; // The trait
 use serde_derive::Serialize; // The derive macro
 use serde_json;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
-#[allow(non_snake_case)] // To allow field names like upstreamServiceName
+#[allow(non_snake_case)] 
 pub struct K8sMeshLogEntry {
     timestamp: String,
     level: String,
@@ -52,7 +52,7 @@ const COMMON_PATHS_RESOURCE: &[&str] = &["users", "products", "orders", "items",
 const COMMON_PATHS_SUFFIX: &[&str] = &["", "/:id", "/:id/summary", "/search", "/stream"];
 const QUERY_PARAMS_KEYS: &[&str] = &["session_id", "user_token", "format", "limit", "offset", "debug"];
 const PROTOCOLS: &[&str] = &["HTTP/1.1", "HTTP/2.0"];
-const STATUS_CODES_WEIGHTED: &[(u16, usize)] = &[ // (status_code, weight)
+const STATUS_CODES_WEIGHTED: &[(u16, usize)] = &[ 
     (200, 60), (201, 10), (204, 5), (301, 2), (302, 2), (304, 3),
     (400, 3), (401, 2), (403, 2), (404, 5), (429, 1),
     (500, 3), (502, 1), (503, 1), (504, 1),
@@ -84,7 +84,7 @@ fn generate_external_ip(rng: &mut StdRng) -> String {
 pub fn generate_k8s_mesh_logs(count: usize, seed: u64) -> Vec<String> {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut logs = Vec::with_capacity(count);
-    let mut current_time = Utc::now() - Duration::days(rng.random_range(1..5)); // Start up to 5 days ago
+    let mut current_time = Utc::now() - Duration::days(rng.random_range(1..5)); 
 
     let status_code_choices: Vec<u16> = STATUS_CODES_WEIGHTED
         .iter()
@@ -104,13 +104,13 @@ pub fn generate_k8s_mesh_logs(count: usize, seed: u64) -> Vec<String> {
         if path_str.contains(":id") {
             path_str = path_str.replace(":id", &rng.random_range(1..10000).to_string());
         }
-        if rng.random_bool(0.4) { // 40% chance of query params
+        if rng.random_bool(0.4) { 
             let num_params = rng.random_range(1..4);
             path_str.push('?');
             for i in 0..num_params {
                 path_str.push_str(QUERY_PARAMS_KEYS.choose(&mut rng).unwrap_or(&"param"));
                 path_str.push('=');
-                path_str.push_str(&rng.random_range(1..1000).to_string()); // Simple numeric values for params
+                path_str.push_str(&rng.random_range(1..1000).to_string()); 
                 if i < num_params - 1 {
                     path_str.push('&');
                 }
@@ -123,10 +123,10 @@ pub fn generate_k8s_mesh_logs(count: usize, seed: u64) -> Vec<String> {
         let bytes_sent = if method == "GET" && status_code == 200 { rng.random_range(100..50000) } else { rng.random_range(50..1000) };
         let bytes_received = if method == "POST" || method == "PUT" { rng.random_range(100..10000) } else { rng.random_range(50..500) };
         
-        let mut duration_ms = rng.random_range(10..500); // Base duration
-        if status_code >= 500 { duration_ms += rng.random_range(100..1000); } // Slower for server errors
-        else if status_code >= 400 { duration_ms += rng.random_range(20..200); } // Slightly slower for client errors
-        else if method == "POST" { duration_ms += rng.random_range(50..300); } // POSTs might take longer
+        let mut duration_ms = rng.random_range(10..500); 
+        if status_code >= 500 { duration_ms += rng.random_range(100..1000); } 
+        else if status_code >= 400 { duration_ms += rng.random_range(20..200); } 
+        else if method == "POST" { duration_ms += rng.random_range(50..300); } 
 
         let upstream_service_name = UPSTREAM_SERVICE_NAMES.choose(&mut rng).unwrap_or(&"unknown-service").to_string();
         let upstream_service_namespace = UPSTREAM_SERVICE_NAMESPACES.choose(&mut rng).unwrap_or(&"default-ns").to_string();
@@ -134,7 +134,7 @@ pub fn generate_k8s_mesh_logs(count: usize, seed: u64) -> Vec<String> {
         let upstream_cluster = format!("outbound|{}||{}.{}.svc.cluster.local", upstream_port, upstream_service_name, upstream_service_namespace);
         let upstream_host_pod_ip = format!("{}:{}", generate_pod_ip(&mut rng), upstream_port);
 
-        let downstream_is_pod = rng.random_bool(0.8); // 80% of traffic from other pods
+        let downstream_is_pod = rng.random_bool(0.8); 
         let downstream_remote_address = if downstream_is_pod {
             format!("{}:{}", generate_pod_ip(&mut rng), rng.random_range(30000..60000))
         } else {
@@ -145,9 +145,9 @@ pub fn generate_k8s_mesh_logs(count: usize, seed: u64) -> Vec<String> {
         let authority = AUTHORITIES.choose(&mut rng).unwrap_or(&"default.example.com").to_string();
         let user_agent = USER_AGENTS.choose(&mut rng).unwrap_or(&"Unknown").to_string();
         
-        let x_forwarded_for = if !downstream_is_pod && rng.random_bool(0.7) { // 70% of external traffic has XFF
+        let x_forwarded_for = if !downstream_is_pod && rng.random_bool(0.7) { 
             Some(downstream_remote_address.split(':').next().unwrap_or("").to_string())
-        } else if downstream_is_pod && rng.random_bool(0.2) { // 20% of internal traffic might have XFF (e.g. internal LB)
+        } else if downstream_is_pod && rng.random_bool(0.2) { 
             Some(format!("{}, {}", generate_external_ip(&mut rng), generate_pod_ip(&mut rng)))
         }
         else {
@@ -156,7 +156,7 @@ pub fn generate_k8s_mesh_logs(count: usize, seed: u64) -> Vec<String> {
 
         let response_flags = RESPONSE_FLAGS.choose(&mut rng).unwrap_or(&"-").to_string();
         
-        let (tls_version, tls_cipher) = if rng.random_bool(0.9) { // 90% of requests use TLS
+        let (tls_version, tls_cipher) = if rng.random_bool(0.9) { 
             (
                 Some(TLS_VERSIONS.choose(&mut rng).unwrap_or(&"TLSv1.2").to_string()),
                 Some(TLS_CIPHERS.choose(&mut rng).unwrap_or(&"AES128-GCM-SHA256").to_string())
@@ -200,5 +200,3 @@ pub fn generate_k8s_mesh_logs(count: usize, seed: u64) -> Vec<String> {
     }
     logs
 }
-
-```
