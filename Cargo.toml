@@ -24,16 +24,16 @@ spectral = "0.6.0"
 uuid = { version = "1.0", features = ["v4", "v1"] }
 string-interner = "0.19.0"
 tracing = "0.1.36"
+rand = "0.9.0"
+serde = "1.0.144"
+serde_derive = "1.0.144"
+serde_json = "1.0.85"
 
 
 [dev-dependencies]
 chrono = "0.4"
 criterion = {version = "0.5.1", features = ["html_reports"]}
 proptest = "1.0.0"
-rand = "0.9.0"
-serde = "1.0.144"
-serde_derive = "1.0.144"
-serde_json = "1.0.85"
 tracing-test = "0.2.3"
 tinytemplate = "1.2.1"
 
