@@ -16,7 +16,7 @@ use drain_flow::query::LogStore;
 
 // Assuming 'generators' is a module in the parent directory (benches/generators/mod.rs)
 // or part of the crate structure accessible via `crate::`
-use crate::generators::{
+use drain_flow::generators::{
     generate_k8s_infra_logs, generate_k8s_mesh_logs, generate_mysql_slow_query_logs,
     generate_rails_app_logs, generate_syslog_messages,
 };

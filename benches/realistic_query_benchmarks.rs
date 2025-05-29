@@ -20,13 +20,9 @@ use drain_flow::query::{
 // Removed: use drain_flow::collect_log_groups_from_drain; // Replaced with drain.collect_all_log_groups()
 
 // Import all generators
-use crate::generators::{
-    // Assuming 'crate::' is the correct path from previous fixes
-    generate_k8s_infra_logs,
-    generate_k8s_mesh_logs,
-    generate_mysql_slow_query_logs,
-    generate_rails_app_logs,
-    generate_syslog_messages,
+use drain_flow::generators::{ // Assuming 'crate::' is the correct path from previous fixes
+    generate_k8s_infra_logs, generate_k8s_mesh_logs, generate_mysql_slow_query_logs,
+    generate_rails_app_logs, generate_syslog_messages,
 };
 use chrono::{Duration as ChronoDuration, Utc};
 use regex::Regex; // For Rails Request ID extraction
