@@ -10,6 +10,7 @@
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
 use rand::{Rng, SeedableRng, seq::SliceRandom, rngs::StdRng};
+use rand::prelude::IndexedRandom;
 use chrono::{Utc, DateTime, Duration};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use uuid::Uuid;

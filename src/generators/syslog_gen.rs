@@ -11,7 +11,7 @@
 
 use chrono::{DateTime, Duration, Utc};
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng, seq::SliceRandom, distributions::Alphanumeric};
+use rand::{Rng, SeedableRng}; // Removed SliceRandom and distributions::Alphanumeric
 // use std::fmt::Write; // Not strictly needed with format! macro
 
 pub struct SyslogEntry {
@@ -104,6 +104,9 @@ const NFSD_HOSTNAMES: &[&str] = &["client1.local", "appserver.corp", "backupclie
 
 
 fn generate_message_for_app(app_name: &str, rng: &mut StdRng, current_kernel_uptime_secs: f64, current_real_time: &DateTime<Utc>) -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
+                            abcdefghijklmnopqrstuvwxyz\
+                            0123456789";
     match app_name {
         "CRON" => {
             let user = CRON_USERS.choose(rng).unwrap_or(&"root");
@@ -284,7 +287,13 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, current_kernel_upt
         }
         "dockerd" => {
             let level = ["info", "warn", "error"].choose(rng).unwrap_or(&"info");
-            let container_id_short: String = (0..12).map(|_| rng.sample(Alphanumeric) as char).collect::<String>().to_lowercase();
+            let container_id_short: String = (0..12)
+                .map(|_| {
+                    let idx = rng.gen_range(0..CHARSET.len());
+                    CHARSET[idx] as char
+                })
+                .collect::<String>()
+                .to_lowercase();
             let image_name = ["ubuntu:latest", "postgres:14-alpine", "nginx:1.21", "custom_app:v1.2.3"].choose(rng).unwrap_or(&"unknown_image");
             let action = ["start", "stop", "create", "destroy", "pull", "health_status"].choose(rng).unwrap_or(&"event");
             
@@ -298,9 +307,16 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, current_kernel_upt
         }
         "kubelet" => {
             let level_char = ["I", "W", "E", "F"].choose(rng).unwrap_or(&"I"); // Klog style
+            let random_pod_suffix: String = (0..5)
+                .map(|_| {
+                    let idx = rng.gen_range(0..CHARSET.len());
+                    CHARSET[idx] as char
+                })
+                .collect::<String>()
+                .to_lowercase();
             let pod_name = format!("{}-{}-{}", ["frontend", "backend", "worker", "cache"].choose(rng).unwrap_or(&"app"), 
                                             ["blue", "green", "prod", "dev"].choose(rng).unwrap_or(&"prod"), 
-                                            (0..5).map(|_| rng.sample(Alphanumeric) as char).collect::<String>().to_lowercase());
+                                            random_pod_suffix);
             let namespace = ["default", "kube-system", "production", "monitoring"].choose(rng).unwrap_or(&"default");
             let component = ["kubelet.go", "pleg.go", "volume_manager.go", "prober.go"].choose(rng).unwrap_or(&"kubelet.go");
             let line_num = rng.gen_range(100..2000);
