@@ -220,7 +220,7 @@ fn generate_message_for_component(component_name: &str, level: LogLevel, rng: &m
                      let messages = [
                         format!("\"Error syncing resource\" controller=\"{}\" key=\"{}\" err=\"{}\"", controller_name, item_key, error_msg_snippet),
                         format!("\"Failed to update status for resource\" kind=\"{}\" name=\"{}\" err=\"{}\"", K8S_KINDS.choose(rng).unwrap_or(&"Deployment"), item_key, error_msg_snippet),
-                        format!("\"Requeuing item due to error\" controller=\"{}\" key="{}\" err=\"{}\"", controller_name, item_key, error_msg_snippet),
+                        format!("\"Requeuing item due to error\" controller=\"{}\" key=\"{}\" err=\"{}\"", controller_name, item_key, error_msg_snippet),
                     ];
                     messages.choose(rng).unwrap_or(&"Default ControllerManager Error".to_string()).to_string()
                 }
@@ -293,5 +293,3 @@ pub fn generate_k8s_infra_logs(count: usize, seed: u64) -> Vec<String> {
     }
     logs
 }
-
-```
