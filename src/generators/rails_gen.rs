@@ -12,8 +12,7 @@
 
 use std::fmt;
 use rand::{Rng, SeedableRng, rngs::StdRng};
-use rand::prelude::IndexedRandom; // For .choose()
-// Removed: use rand::seq::SliceRandom; // IndexedRandom should cover .choose()
+use rand::prelude::IndexedRandom; 
 use chrono::{Utc, Duration, SecondsFormat};
 use uuid::Uuid;
 
@@ -58,7 +57,7 @@ const HTTP_METHODS: &[&str] = &["GET", "POST", "PUT", "DELETE", "PATCH"];
 const PATHS: &[&str] = &["/users", "/users/:id", "/products", "/products/:id/details", "/orders", "/cart", "/admin/dashboard"];
 const CONTROLLERS: &[&str] = &["UsersController", "ProductsController", "OrdersController", "Admin::DashboardsController"];
 const ACTIONS: &[&str] = &["index", "show", "create", "update", "destroy", "edit", "new"];
-const PARAM_KEYS: &[&str] = &["page", "per_page", "sort_by", "filter", "id", "product_id", "user_id", "utf8", "authenticity_token"];
+pub(crate) const PARAM_KEYS: &[&str] = &["page", "per_page", "sort_by", "filter", "id", "product_id", "user_id", "utf8", "authenticity_token"];
 const DB_ACTIONS: &[&str] = &["User Load", "Product Load", "Order Update", "Session Create", "Cache Read"];
 const TEMPLATES: &[&str] = &["users/index.html.erb", "products/show.html.erb", "layouts/application.html.erb"];
 const ERROR_DESCRIPTIONS: &[&str] = &[
@@ -84,6 +83,8 @@ const BACKTRACE_METHODS: &[&str] = &[
     "render_template",
     "handle_exception"
 ];
+const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
 
 fn generate_rails_request_logs(rng: &mut StdRng, base_time: &mut chrono::DateTime<Utc>) -> Vec<String> {
     let mut logs = Vec::new();
@@ -101,7 +102,6 @@ fn generate_rails_request_logs(rng: &mut StdRng, base_time: &mut chrono::DateTim
     let params_string = if params_present {
         let num_params = rng.random_range(1..4);
         let mut params_map_str = String::from("{");
-        const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         for i in 0..num_params {
             let param_key = PARAM_KEYS.choose(rng).map(|s| s.to_string()).unwrap_or_else(|| "default_param".to_string());
             
@@ -153,41 +153,41 @@ fn generate_rails_request_logs(rng: &mut StdRng, base_time: &mut chrono::DateTim
         ));
     }
     
-    let is_error_request = rng.random_bool(0.15); // 15% chance of error
+    let is_error_request = rng.random_bool(0.15); 
 
     if !is_error_request {
         let num_db_queries = rng.random_range(1..=3);
         for _ in 0..num_db_queries {
-            *base_time += Duration::microseconds(rng.random_range(200..10_000)); // DB queries can take longer
+            *base_time += Duration::microseconds(rng.random_range(200..10_000)); 
             let db_action = DB_ACTIONS.choose(rng).map(|s| s.to_string()).unwrap_or_else(|| "User Load".to_string());
-            let db_time_ms = rng.random_range(0.1..15.0) as f32; // Increased upper bound for DB time
+            let db_time_ms = rng.random_range(0.1..15.0) as f32; 
             logs.push(format_log_line(*base_time, Severity::DEBUG, &context.request_id, context.pid, 
                 &format!("{} ({:.1}ms) SELECT \"users\".* FROM \"users\" WHERE id = {}", db_action, db_time_ms, rng.random_range(1..1000))
             ));
         }
 
-        *base_time += Duration::microseconds(rng.random_range(1000..20_000)); // View rendering
+        *base_time += Duration::microseconds(rng.random_range(1000..20_000)); 
         let template = TEMPLATES.choose(rng).map(|s| s.to_string()).unwrap_or_else(|| "index.html.erb".to_string());
-        let view_time_ms = rng.random_range(5.0..150.0) as f32; // Increased view time
-        let active_record_total_ms: f32 = rng.random_range(0.5..20.0); // Sum of DB times for this request
+        let view_time_ms = rng.random_range(5.0..150.0) as f32; 
+        let active_record_total_ms: f32 = rng.random_range(0.5..20.0); 
         
         logs.push(format_log_line(*base_time, Severity::INFO, &context.request_id, context.pid, 
             &format!("Rendered {} (Duration: {:.1}ms | Views: {:.1}ms | ActiveRecord: {:.1}ms)", template, view_time_ms + active_record_total_ms, view_time_ms, active_record_total_ms)
         ));
 
         *base_time += Duration::microseconds(rng.random_range(100..5000));
-        let total_duration_ms = rng.random_range(10.0..500.0) as f32; // Increased total duration
-        let active_record_ms = rng.random_range(1.0..(total_duration_ms * 0.6).max(1.1)) as f32; // ActiveRecord can be a larger portion
+        let total_duration_ms = rng.random_range(10.0..500.0) as f32; 
+        let active_record_ms = rng.random_range(1.0..(total_duration_ms * 0.6).max(1.1)) as f32; 
         let allocations = rng.random_range(5000..50000);
         logs.push(format_log_line(*base_time, Severity::INFO, &context.request_id, context.pid, 
             &format!("Completed 200 OK in {:.0}ms (Views: {:.1}ms | ActiveRecord: {:.1}ms | Allocations: {})", 
-                view_time_ms + active_record_ms + rng.random_range(1.0..5.0), // Simplified total, ensuring it's > sum of parts
+                view_time_ms + active_record_ms + rng.random_range(1.0..5.0), 
                 view_time_ms, 
                 active_record_ms,
                 allocations
             )
         ));
-    } else { // Error path
+    } else { 
         *base_time += Duration::microseconds(rng.random_range(500..10_000));
         logs.push(format_log_line(*base_time, Severity::ERROR, &context.request_id, context.pid, 
             "Something went wrong processing the request!"
@@ -216,7 +216,7 @@ fn generate_rails_request_logs(rng: &mut StdRng, base_time: &mut chrono::DateTim
 fn format_log_line(timestamp: chrono::DateTime<Utc>, severity: Severity, request_id: &str, pid: u32, message: &str) -> String {
     format!("{}, [{}Z #{}] {} -- [REQUEST_ID: {}] {}", 
         severity.first_letter(),
-        timestamp.to_rfc3339_opts(SecondsFormat::Micros, false), // Using false for Z at the end
+        timestamp.to_rfc3339_opts(SecondsFormat::Micros, false), 
         pid,
         severity,
         request_id,
@@ -229,15 +229,12 @@ pub fn generate_rails_app_logs(num_requests: usize, seed: u64) -> Vec<String> {
     let mut all_logs = Vec::new();
     let mut current_base_time = Utc::now() - Duration::days(main_rng.random_range(1..10));
 
-
     for _ in 0..num_requests {
         let request_seed = main_rng.random::<u64>();
         let mut request_rng = StdRng::seed_from_u64(request_seed);
         let request_logs = generate_rails_request_logs(&mut request_rng, &mut current_base_time);
         all_logs.extend(request_logs);
-        current_base_time += Duration::seconds(main_rng.random_range(0..5)); // Gap between requests
+        current_base_time += Duration::seconds(main_rng.random_range(0..5)); 
     }
     all_logs
 }
-
-```
