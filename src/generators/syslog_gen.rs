@@ -88,21 +88,20 @@ const CUSTOM_SCRIPT_NAMES: &[&str] = &["backup.sh", "cleanup.py", "monitor_load.
 const CUSTOM_SCRIPT_IDS: &[&str] = &["task_123", "job_abc", "process_xyz", "item_789"];
 const CUSTOM_SCRIPT_ERRORS: &[&str] = &["E_TIMEOUT", "E_DISK_FULL", "E_PERM_DENIED", "E_CONFIG_MISSING"];
 const CUSTOM_SCRIPT_VALUES: &[&str] = &["true", "false", "0", "1024", "/mnt/data", "completed"];
+// Define SYSLOG_PARAM_KEYS for syslog_gen.rs, distinct from rails_gen.rs PARAM_KEYS
+const SYSLOG_PARAM_KEYS: &[&str] = &["service_status", "event_code", "user_id", "path", "duration_sec"];
 
-// samba
+
 const SAMBA_FUNCTIONS: &[&str] = &["close_cnum", "smbd_process", "make_connection_snum", "reply_tcon_and_X"];
 const SAMBA_SERVICES: &[&str] = &["IPC$", "public_share", "homes", "print$"];
 
-// nfsd
 const NFSD_HOSTNAMES: &[&str] = &["client-A.lan", "compute-node-5.internal", "10.0.10.100"];
 
-// dockerd
 const DOCKERD_LEVELS: &[&str] = &["info", "warning", "error"];
 const DOCKERD_CONTAINER_ID_PREFIX: &[&str] = &["a1b2c3d4e5f6", "7g8h9i0j1k2l", "m3n4o5p6q7r8s9"];
 const DOCKERD_IMAGE_NAMES: &[&str] = &["ubuntu:latest", "postgres:14-alpine", "nginx:1.21", "custom_app:v1.2.3"];
 const DOCKERD_ACTIONS: &[&str] = &["start", "stop", "create", "destroy", "pull", "health_status"];
 
-// kubelet
 const KUBELET_POD_NAMES: &[&str] = &["frontend-", "backend-", "database-", "worker-", "cache-"];
 const KUBELET_NAMESPACES: &[&str] = &["default", "kube-system", "production", "monitoring", "dev"];
 const KUBELET_COMPONENTS: &[&str] = &["kubelet.go", "pleg.go", "volume_manager.go", "prober.go", "server.go"];
@@ -111,7 +110,8 @@ const KUBELET_PROBE_TYPES: &[&str] = &["Readiness", "Liveness"];
 const KUBELET_PROBE_RESULTS: &[&str] = &["Success", "Failure"];
 const KUBELET_STATUS: &[&str] = &["running", "pending", "succeeded", "failed", "unknown"];
 
-const CHARSET: &[u8] = b"abcdef0123456789"; // For short hex IDs
+const CHARSET: &[u8] = b"abcdef0123456789"; 
+const VETH_IF_PREFIX: &[&str] = &["veth", "vetheth"]; 
 
 #[derive(Debug)]
 pub struct SyslogEntry {
@@ -141,11 +141,11 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
             format!("({}) CMD ({})", user, command)
         }
         "systemd" => {
-            if rng.random_bool(0.8) { // 80% service actions
+            if rng.random_bool(0.8) { 
                 let service = SYSTEMD_SERVICES.choose(rng).unwrap_or(&"unknown.service");
                 let action = SYSTEMD_ACTIONS.choose(rng).unwrap_or(&"Starting");
                 format!("{} {}...", action, service)
-            } else { // 20% target reached
+            } else { 
                 let target = SYSTEMD_TARGETS.choose(rng).unwrap_or(&"default.target");
                 format!("Reached target {}.", target)
             }
@@ -170,7 +170,6 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
             let base_msg = format!("[{:5}.{:06}] ", uptime_secs_display, uptime_frac_display);
             
             let mut message = KERNEL_MSG_TEMPLATES.choose(rng).unwrap_or(&"generic kernel message").to_string();
-            // Replace placeholders
             message = message.replace("{usb_bus}", USB_BUS.choose(rng).unwrap_or(&"1"));
             message = message.replace("{usb_port}", USB_PORT.choose(rng).unwrap_or(&"1.1"));
             message = message.replace("{usb_speed}", USB_SPEED.choose(rng).unwrap_or(&"high"));
@@ -179,20 +178,20 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
             message = message.replace("{cpu_id}", &rng.random_range(0..4).to_string());
             message = message.replace("{hex_val}", &format!("{:x}", rng.random_range(1..16)));
             message = message.replace("{ts_float}", &format!("{}.{}", current_wall_time.timestamp(), current_wall_time.timestamp_subsec_micros()));
-            message = message.replace("{status}", ["DENIED", "ALLOWED"].choose(rng).unwrap_or(&"DENIED"));
-            message = message.replace("{op}", ["open", "connect", "mkdir"].choose(rng).unwrap_or(&"open"));
-            message = message.replace("{profile}", ["/usr/sbin/sssd", "snap.docker.dockerd"].choose(rng).unwrap_or(&"/usr/sbin/sssd"));
-            message = message.replace("{name}", ["/etc/krb5.keytab", "/var/log/messages"].choose(rng).unwrap_or(&"/etc/krb5.keytab"));
+            message = message.replace("{status}", if *(*["DENIED", "ALLOWED"].choose(rng).unwrap_or(&"DENIED")) == "DENIED" {"DENIED"} else {"ALLOWED"});
+            message = message.replace("{op}", (*["open", "connect", "mkdir"].choose(rng).unwrap_or(&"open")));
+            message = message.replace("{profile}", (*["/usr/sbin/sssd", "snap.docker.dockerd"].choose(rng).unwrap_or(&"/usr/sbin/sssd")));
+            message = message.replace("{name}", (*["/etc/krb5.keytab", "/var/log/messages"].choose(rng).unwrap_or(&"/etc/krb5.keytab")));
             message = message.replace("{pid_val}", &rng.random_range(100..99999).to_string());
-            message = message.replace("{comm}", ["sssd_be", "dockerd", "anacron"].choose(rng).unwrap_or(&"sssd_be"));
-            message = message.replace("{req_mask}", ["r", "rw", "w"].choose(rng).unwrap_or(&"r"));
-            message = message.replace("{den_mask}", ["r", "w"].choose(rng).unwrap_or(&"r"));
+            message = message.replace("{comm}", (*["sssd_be", "dockerd", "anacron"].choose(rng).unwrap_or(&"sssd_be")));
+            message = message.replace("{req_mask}", (*["r", "rw", "w"].choose(rng).unwrap_or(&"r")));
+            message = message.replace("{den_mask}", (*["r", "w"].choose(rng).unwrap_or(&"r")));
             message = message.replace("{fsuid}", &rng.random_range(0..1000).to_string());
             message = message.replace("{ouid}", &rng.random_range(0..1000).to_string());
             message = message.replace("{ata_id}", ATA_ID.choose(rng).unwrap_or(&"1"));
             message = message.replace("{ata_cmd}", ATA_CMD.choose(rng).unwrap_or(&"READ FPDMA QUEUED"));
             message = message.replace("{bytes}", &rng.random_range(128..1024).to_string());
-            message = message.replace("{device}", ["sda1", "nvme0n1p2", "vda"].choose(rng).unwrap_or(&"sda1"));
+            message = message.replace("{device}", (*["sda1", "nvme0n1p2", "vda"].choose(rng).unwrap_or(&"sda1")));
             message = message.replace("{input_device_name}", INPUT_DEVICE_NAME.choose(rng).unwrap_or(&"Unknown Input Device"));
             message = message.replace("{input_id}", &rng.random_range(10..30).to_string());
             message = message.replace("{port_num}", &rng.random_range(1..10).to_string());
@@ -204,7 +203,7 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
         }
         "ntpd" => {
             let action = NTP_ACTIONS.choose(rng).unwrap_or(&"synchronized to");
-            match action {
+            match *action { // Dereference here
                 "synchronized to" => {
                     let server_ip = NTP_SERVERS.choose(rng).unwrap_or(&"unknown.server");
                     let stratum = rng.random_range(1..5);
@@ -218,11 +217,11 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
             }
         }
         "named" => {
-            let client_ip = SSH_IPS.choose(rng).unwrap_or(&"client.ip"); // Re-use for simplicity
+            let client_ip = SSH_IPS.choose(rng).unwrap_or(&"client.ip"); 
             let client_port = rng.random_range(10000..60000);
             let domain_name = DOMAINS.choose(rng).unwrap_or(&"query.domain");
             let record_type = RECORD_TYPES.choose(rng).unwrap_or(&"A");
-            let server_ip = NTP_SERVERS.choose(rng).unwrap_or(&"server.ip"); // Re-use for simplicity
+            let server_ip = NTP_SERVERS.choose(rng).unwrap_or(&"server.ip"); 
             format!("client @0x{:x} {}#{} ({}): query: {} IN {} + ({})", 
                 rng.random::<u32>(), client_ip, client_port, domain_name, domain_name, record_type, server_ip)
         }
@@ -230,27 +229,27 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
             let qid = POSTFIX_QUEUE_IDS.choose(rng).unwrap_or(&"NOQUEUE");
             let sub_type = rng.random_range(0..3);
             match sub_type {
-                0 => { // message-id
+                0 => { 
                     let msg_id_local_part = rng.random::<u64>();
                     let msg_id_host = DOMAINS.choose(rng).unwrap_or(&"host.local");
                     format!("{}: message-id=<{:x}.{:x}@{}>", qid, msg_id_local_part, rng.random::<u32>(), msg_id_host)
                 }
-                1 => { // from/size
+                1 => { 
                     let from_email = POSTFIX_EMAILS.choose(rng).unwrap_or(&"null@local");
                     let size = rng.random_range(100..50000);
                     let nrcpt = rng.random_range(1..5);
                     format!("{}: from=<{}>, size={}, nrcpt={}", qid, from_email, size, nrcpt)
                 }
-                _ => { // to/relay/status
+                _ => { 
                     let to_email = POSTFIX_EMAILS.choose(rng).unwrap_or(&"recipient@remote");
                     let relay_srv = POSTFIX_RELAYS.choose(rng).unwrap_or(&"relay.host");
-                    let relay_ip = SSH_IPS.choose(rng).unwrap_or(&"127.0.0.1"); // Can be an IP
-                    let relay_port = [25, 587, 465].choose(rng).unwrap_or(&25);
-                    let delay = rng.random_range(0.1..15.0) as f32; // Total delay
+                    let relay_ip = SSH_IPS.choose(rng).unwrap_or(&"127.0.0.1"); 
+                    let relay_port = *[25, 587, 465].choose(rng).unwrap_or(&25);
+                    let delay = rng.random_range(0.1..15.0) as f32; 
                     let (d1, d2, d3, d4) = (delay*rng.random_range(0.0..0.2), delay*rng.random_range(0.1..0.3), delay*rng.random_range(0.2..0.5), delay*rng.random_range(0.3..0.7)); 
                     let dsn_val = POSTFIX_DSN.choose(rng).unwrap_or(&"2.0.0");
                     let status_val = POSTFIX_STATUS.choose(rng).unwrap_or(&"sent");
-                    let reason = if status_val != "sent" { 
+                    let reason = if *status_val != "sent" { 
                         format!("(host {} said: {} {} - some_error_code)", relay_srv, rng.random_range(400..599), POSTFIX_EMAILS.choose(rng).unwrap_or(&"unknown"))
                     } else { 
                         "message accepted for delivery".to_string() 
@@ -262,13 +261,13 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
         }
         "custom_script" => {
             let script_name = CUSTOM_SCRIPT_NAMES.choose(rng).unwrap_or(&"generic.sh");
-            let level = ["INFO", "WARN", "DEBUG", "ERROR"].choose(rng).unwrap_or(&"INFO");
+            let level = *["INFO", "WARN", "DEBUG", "ERROR"].choose(rng).unwrap_or(&"INFO"); // Dereference here
             let item_id = CUSTOM_SCRIPT_IDS.choose(rng).unwrap_or(&"item_unknown");
-            match level {
+            match level { // Now level is &str
                 "INFO" => format!("{}: [{}] Processing item {}.", level, script_name, item_id),
                 "WARN" => format!("{}: [{}] Item {} has a minor issue.", level, script_name, item_id),
                 "DEBUG" => {
-                    let param = PARAM_KEYS.choose(rng).unwrap_or(&"config_param");
+                    let param = SYSLOG_PARAM_KEYS.choose(rng).unwrap_or(&"config_param"); // Use SYSLOG_PARAM_KEYS
                     let value = CUSTOM_SCRIPT_VALUES.choose(rng).unwrap_or(&"default_val");
                     format!("{}: [{}] Value of {} set to {}.", level, script_name, param, value)
                 },
@@ -297,31 +296,29 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
                 format!("lockd: server {} not responding, still trying", client_host)
             } else if rng.random_bool(0.3) {
                 let client_ip = SSH_IPS.choose(rng).unwrap_or(&"nfs.client.ip");
-                let reason = ["access denied by server", "no_subtree_check", "sync error"].choose(rng).unwrap_or(&"unknown reason");
+                let reason = (*["access denied by server", "no_subtree_check", "sync error"].choose(rng).unwrap_or(&"unknown reason"));
                 format!("mountd: refused mount request from {} for /exports/data ({})", client_ip, reason)
             } else {
-                let auth_flavor = ["AUTH_NULL", "AUTH_SYS", "RPCSEC_GSS"].choose(rng).unwrap_or(&"AUTH_SYS");
+                let auth_flavor = (*["AUTH_NULL", "AUTH_SYS", "RPCSEC_GSS"].choose(rng).unwrap_or(&"AUTH_SYS"));
                 format!("auth: unhandled client flavor {}", auth_flavor)
             }
         }
         "dockerd" => {
             let level = DOCKERD_LEVELS.choose(rng).unwrap_or(&"info");
-            let container_id_prefix = DOCKERD_CONTAINER_ID_PREFIX.choose(rng).unwrap_or(&"abcdef123456");
             let container_id_short: String = (0..12).map(|_| CHARSET[rng.random_range(0..CHARSET.len())] as char).collect();
-
             let image_name = DOCKERD_IMAGE_NAMES.choose(rng).unwrap_or(&"unknown_image");
             let action = DOCKERD_ACTIONS.choose(rng).unwrap_or(&"event");
             
-            match action {
-                "start" | "stop" | "create" | "destroy" => format!("level={} msg=\"Container {} {} {} ({})\"", level, container_id_short, action, image_name, container_id_prefix),
+            match *action { // Dereference here
+                "start" | "stop" | "create" | "destroy" => format!("level={} msg=\"Container {} {} {} ({})\"", level, container_id_short, action, image_name, DOCKERD_CONTAINER_ID_PREFIX.choose(rng).unwrap_or(&"abcdef")),
                 "pull" => format!("level={} msg=\"Pulling fs layer\" image={} layer=fs{}", level, image_name, rng.random_range(1..5)),
-                _ => format!("level={} msg=\"Health status for container {} is {} \" module=libcontainerd status={}", level, container_id_short, image_name, rng.random_range(0..=1)), // Inclusive range for 0 or 1
+                _ => format!("level={} msg=\"Health status for container {} is {} \" module=libcontainerd status={}", level, container_id_short, image_name, rng.random_range(0..=1)),
             }
         }
         "kubelet" => {
-            let level_char = ["I", "W", "E", "F"].choose(rng).unwrap_or(&"I"); // Klog style
+            let level_char = ["I", "W", "E", "F"].choose(rng).unwrap_or(&"I"); 
             let klog_ts = current_wall_time.format("%m%d %H:%M:%S.%f").to_string();
-            let thread_id = 1; // Typically 1 for kubelet main thread
+            let thread_id = 1; 
             
             let pod_name_prefix = KUBELET_POD_NAMES.choose(rng).unwrap_or(&"app-");
             let pod_suffix: String = (0..5).map(|_| CHARSET[rng.random_range(0..CHARSET.len())] as char).collect();
@@ -331,20 +328,19 @@ fn generate_message_for_app(app_name: &str, rng: &mut StdRng, kernel_uptime_secs
             let line_num = rng.random_range(100..2000);
             
             let event_type = KUBELET_EVENT_TYPES.choose(rng).unwrap_or(&"Event");
-            let message_body = match event_type {
+            let message_body = match *event_type { // Dereference here
                 "SyncLoop" => format!("\"{}\" pod=\"{}/{}\" status=\"{}\"", event_type, namespace, pod_name, KUBELET_STATUS.choose(rng).unwrap_or(&"running")),
-                "PLEG" => format!("\"{}\" Error: {}, Details: {}", event_type, ["FailedToGetContainerManager", "PodStopped"].choose(rng).unwrap_or(&"Error"), ["rpc error: code = DeadlineExceeded", "container not found"].choose(rng).unwrap_or(&"details")),
+                "PLEG" => format!("\"{}\" Error: {}, Details: {}", event_type, (*["FailedToGetContainerManager", "PodStopped"].choose(rng).unwrap_or(&"Error")), (*["rpc error: code = DeadlineExceeded", "container not found"].choose(rng).unwrap_or(&"details"))),
                 "Probe" => format!("\"{}\" pod=\"{}/{}\" probe=\"{}\" result=\"{}\"", event_type, namespace, pod_name, KUBELET_PROBE_TYPES.choose(rng).unwrap_or(&"Liveness"), KUBELET_PROBE_RESULTS.choose(rng).unwrap_or(&"Success")),
-                _ => format!("\"{}\" pod=\"{}/{}\" message=\"{}\"", event_type, namespace, pod_name, ["Configuration changed", "Pod sandbox changed"].choose(rng).unwrap_or(&"message")),
+                _ => format!("\"{}\" pod=\"{}/{}\" message=\"{}\"", event_type, namespace, pod_name, (*["Configuration changed", "Pod sandbox changed"].choose(rng).unwrap_or(&"message"))),
             };
             format!("{} {} {:>7} {}:{}] {}", level_char, klog_ts, thread_id, component, line_num, message_body)
         }
-        "vector-agent" => format!("INFO vector::shutdown: Vector has stopped."), // Simple static message
+        "vector-agent" => format!("INFO vector::shutdown: Vector has stopped."),
         _ => format!("Generic message for {} - ID: {}", app_name, rng.random::<u32>()),
     }
 }
 
-const VETH_IF_PREFIX: &[&str] = &["veth", "vetheth"]; // For kernel messages
 
 pub fn generate_syslog_messages(count: usize, seed: u64) -> Vec<String> {
     let mut rng = StdRng::seed_from_u64(seed);
@@ -352,25 +348,22 @@ pub fn generate_syslog_messages(count: usize, seed: u64) -> Vec<String> {
     
     let days_past = rng.random_range(1..60);
     let mut current_time = Utc::now() - Duration::days(days_past);
-    // Kernel uptime usually starts from a large value and increments, not tied to wall clock start of logs
-    let initial_kernel_uptime_offset_secs = rng.random_range(0.0..(3_600_000.0 * 24.0 * 7.0)); // Up to 7 days of uptime before first log
+    let initial_kernel_uptime_offset_secs = rng.random_range(0.0..(3_600_000.0 * 24.0 * 7.0)); 
     let mut current_kernel_uptime_secs = initial_kernel_uptime_offset_secs;
 
     for _ in 0..count {
-        let time_increment_secs = rng.random_range(0..300); // 0 seconds to 5 minutes (0 for multiple logs at same time)
-        let time_increment_nanos = rng.random_range(0..1_000_000_000); // Add nanosecond precision
+        let time_increment_secs = rng.random_range(0..300); 
+        let time_increment_nanos = rng.random_range(0..1_000_000_000); 
         current_time += Duration::seconds(time_increment_secs) + Duration::nanoseconds(time_increment_nanos);
         
-        // Kernel uptime increments independently and generally faster on average than wall clock for logs
         current_kernel_uptime_secs += rng.random_range(0.0..5.0) + (rng.random_range(0..1_000_000) as f64 / 1_000_000.0);
-
 
         let hostname = HOSTNAMES.choose(&mut rng).unwrap_or(&"localhost").to_string();
         let app_name = APP_NAMES.choose(&mut rng).unwrap_or(&"unknown_app").to_string();
         
         let pid = match app_name.as_str() {
             "kernel" => None,
-            "systemd" if rng.random_bool(0.1) => None, // Some systemd messages (like target reached) don't have PIDs
+            "systemd" if rng.random_bool(0.1) => None, 
             _ => Some(rng.random_range(100..99999)),
         };
 
@@ -387,5 +380,4 @@ pub fn generate_syslog_messages(count: usize, seed: u64) -> Vec<String> {
     }
     logs
 }
-
 ```
