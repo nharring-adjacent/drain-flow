@@ -32,14 +32,19 @@ fn benchmark_mysql_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_sl_process.throughput(Throughput::Elements(*count as u64));
         let logs = generate_mysql_slow_query_logs(*count, seed);
-        group_sl_process.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
-                for line in l.iter() { 
-                    drain.process_line(black_box(line.clone()));
-                }
-            });
-        });
+        group_sl_process.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain =
+                        SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                });
+            },
+        );
     }
     group_sl_process.finish();
 
@@ -47,32 +52,42 @@ fn benchmark_mysql_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_sl_store.throughput(Throughput::Elements(*count as u64)); // Using *count as it represents lines for mysql_gen
         let logs = generate_mysql_slow_query_logs(*count, seed);
-        group_sl_store.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-                let log_groups = drain.collect_all_log_groups(); 
-                let _store = LogStore::from_log_groups(black_box(log_groups));
-            });
-        });
+        group_sl_store.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain =
+                        SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                    let log_groups = drain.collect_all_log_groups();
+                    let _store = LogStore::from_log_groups(black_box(log_groups));
+                });
+            },
+        );
     }
     group_sl_store.finish();
 
     // --- Benchmarks for TwoStageDrain ---
     let mut group_tsd_process = c.benchmark_group("MySQL_TwoStageDrain_ProcessLine");
     for count in line_counts.iter() {
-        group_tsd_process.throughput(Throughput::Elements(*count as u64)); 
+        group_tsd_process.throughput(Throughput::Elements(*count as u64));
         let logs = generate_mysql_slow_query_logs(*count, seed);
-        group_tsd_process.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-            });
-        });
+        group_tsd_process.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100)
+                        .expect("Failed to create TwoStageDrain");
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                });
+            },
+        );
     }
     group_tsd_process.finish();
 
@@ -80,16 +95,21 @@ fn benchmark_mysql_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_tsd_store.throughput(Throughput::Elements(*count as u64));
         let logs = generate_mysql_slow_query_logs(*count, seed);
-        group_tsd_store.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-                let log_groups = drain.collect_all_log_groups(); 
-                let _store = LogStore::from_log_groups(black_box(log_groups));
-            });
-        });
+        group_tsd_store.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100)
+                        .expect("Failed to create TwoStageDrain");
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                    let log_groups = drain.collect_all_log_groups();
+                    let _store = LogStore::from_log_groups(black_box(log_groups));
+                });
+            },
+        );
     }
     group_tsd_store.finish();
 }
@@ -103,11 +123,12 @@ fn benchmark_rails_ingestion(c: &mut Criterion) {
     let mut group_sl_process = c.benchmark_group("Rails_SingleLayer_ProcessLine");
     for count in line_counts.iter() {
         let logs = generate_rails_app_logs(*count, seed);
-        group_sl_process.throughput(Throughput::Elements(logs.len() as u64)); 
+        group_sl_process.throughput(Throughput::Elements(logs.len() as u64));
         group_sl_process.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l| {
             b.iter(|| {
-                let mut drain = SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
-                for line in l.iter() { 
+                let mut drain =
+                    SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
+                for line in l.iter() {
                     drain.process_line(black_box(line.clone()));
                 }
             });
@@ -121,7 +142,8 @@ fn benchmark_rails_ingestion(c: &mut Criterion) {
         group_sl_store.throughput(Throughput::Elements(logs.len() as u64));
         group_sl_store.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l| {
             b.iter(|| {
-                let mut drain = SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
+                let mut drain =
+                    SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
                 for line in l.iter() {
                     drain.process_line(black_box(line.clone()));
                 }
@@ -139,7 +161,8 @@ fn benchmark_rails_ingestion(c: &mut Criterion) {
         group_tsd_process.throughput(Throughput::Elements(logs.len() as u64));
         group_tsd_process.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l| {
             b.iter(|| {
-                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
+                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100)
+                    .expect("Failed to create TwoStageDrain");
                 for line in l.iter() {
                     drain.process_line(black_box(line.clone()));
                 }
@@ -154,7 +177,8 @@ fn benchmark_rails_ingestion(c: &mut Criterion) {
         group_tsd_store.throughput(Throughput::Elements(logs.len() as u64));
         group_tsd_store.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l| {
             b.iter(|| {
-                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
+                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100)
+                    .expect("Failed to create TwoStageDrain");
                 for line in l.iter() {
                     drain.process_line(black_box(line.clone()));
                 }
@@ -176,14 +200,18 @@ fn benchmark_syslog_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_sl_process.throughput(Throughput::Elements(*count as u64));
         let logs = generate_syslog_messages(*count, seed);
-        group_sl_process.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = SingleLayer::new(vec![]).unwrap();
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-            });
-        });
+        group_sl_process.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = SingleLayer::new(vec![]).unwrap();
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                });
+            },
+        );
     }
     group_sl_process.finish();
 
@@ -191,16 +219,20 @@ fn benchmark_syslog_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_sl_store.throughput(Throughput::Elements(*count as u64));
         let logs = generate_syslog_messages(*count, seed);
-        group_sl_store.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = SingleLayer::new(vec![]).unwrap();
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-                let log_groups = drain.collect_all_log_groups(); 
-                let _store = LogStore::from_log_groups(black_box(log_groups));
-            });
-        });
+        group_sl_store.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = SingleLayer::new(vec![]).unwrap();
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                    let log_groups = drain.collect_all_log_groups();
+                    let _store = LogStore::from_log_groups(black_box(log_groups));
+                });
+            },
+        );
     }
     group_sl_store.finish();
 
@@ -209,14 +241,18 @@ fn benchmark_syslog_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_tsd_process.throughput(Throughput::Elements(*count as u64));
         let logs = generate_syslog_messages(*count, seed);
-        group_tsd_process.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).unwrap();
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-            });
-        });
+        group_tsd_process.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).unwrap();
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                });
+            },
+        );
     }
     group_tsd_process.finish();
 
@@ -224,16 +260,20 @@ fn benchmark_syslog_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_tsd_store.throughput(Throughput::Elements(*count as u64));
         let logs = generate_syslog_messages(*count, seed);
-        group_tsd_store.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).unwrap();
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-                let log_groups = drain.collect_all_log_groups(); 
-                let _store = LogStore::from_log_groups(black_box(log_groups));
-            });
-        });
+        group_tsd_store.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).unwrap();
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                    let log_groups = drain.collect_all_log_groups();
+                    let _store = LogStore::from_log_groups(black_box(log_groups));
+                });
+            },
+        );
     }
     group_tsd_store.finish();
 }
@@ -248,14 +288,18 @@ fn benchmark_k8s_mesh_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_sl_process.throughput(Throughput::Elements(*count as u64));
         let logs = generate_k8s_mesh_logs(*count, seed);
-        group_sl_process.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = SingleLayer::new(vec![]).unwrap();
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-            });
-        });
+        group_sl_process.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = SingleLayer::new(vec![]).unwrap();
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                });
+            },
+        );
     }
     group_sl_process.finish();
 
@@ -263,16 +307,20 @@ fn benchmark_k8s_mesh_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_sl_store.throughput(Throughput::Elements(*count as u64));
         let logs = generate_k8s_mesh_logs(*count, seed);
-        group_sl_store.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = SingleLayer::new(vec![]).unwrap();
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-                let log_groups = drain.collect_all_log_groups(); 
-                let _store = LogStore::from_log_groups(black_box(log_groups));
-            });
-        });
+        group_sl_store.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = SingleLayer::new(vec![]).unwrap();
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                    let log_groups = drain.collect_all_log_groups();
+                    let _store = LogStore::from_log_groups(black_box(log_groups));
+                });
+            },
+        );
     }
     group_sl_store.finish();
 
@@ -281,14 +329,18 @@ fn benchmark_k8s_mesh_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_tsd_process.throughput(Throughput::Elements(*count as u64));
         let logs = generate_k8s_mesh_logs(*count, seed);
-        group_tsd_process.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).unwrap();
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-            });
-        });
+        group_tsd_process.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).unwrap();
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                });
+            },
+        );
     }
     group_tsd_process.finish();
 
@@ -296,16 +348,20 @@ fn benchmark_k8s_mesh_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_tsd_store.throughput(Throughput::Elements(*count as u64));
         let logs = generate_k8s_mesh_logs(*count, seed);
-        group_tsd_store.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).unwrap();
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-                let log_groups = drain.collect_all_log_groups(); 
-                let _store = LogStore::from_log_groups(black_box(log_groups));
-            });
-        });
+        group_tsd_store.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).unwrap();
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                    let log_groups = drain.collect_all_log_groups();
+                    let _store = LogStore::from_log_groups(black_box(log_groups));
+                });
+            },
+        );
     }
     group_tsd_store.finish();
 }
@@ -320,14 +376,18 @@ fn benchmark_k8s_infra_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_sl_process.throughput(Throughput::Elements(*count as u64));
         let logs = generate_k8s_infra_logs(*count, seed);
-        group_sl_process.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = SingleLayer::new(vec![]).unwrap();
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-            });
-        });
+        group_sl_process.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = SingleLayer::new(vec![]).unwrap();
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                });
+            },
+        );
     }
     group_sl_process.finish();
 
@@ -335,16 +395,20 @@ fn benchmark_k8s_infra_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_sl_store.throughput(Throughput::Elements(*count as u64));
         let logs = generate_k8s_infra_logs(*count, seed);
-        group_sl_store.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| { 
-            b.iter(|| {
-                let mut drain = SingleLayer::new(vec![]).unwrap();
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-                let log_groups = drain.collect_all_log_groups(); 
-                let _store = LogStore::from_log_groups(black_box(log_groups));
-            });
-        });
+        group_sl_store.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = SingleLayer::new(vec![]).unwrap();
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                    let log_groups = drain.collect_all_log_groups();
+                    let _store = LogStore::from_log_groups(black_box(log_groups));
+                });
+            },
+        );
     }
     group_sl_store.finish();
 
@@ -353,14 +417,18 @@ fn benchmark_k8s_infra_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_tsd_process.throughput(Throughput::Elements(*count as u64));
         let logs = generate_k8s_infra_logs(*count, seed);
-        group_tsd_process.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| {
-            b.iter(|| {
-                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).unwrap();
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-            });
-        });
+        group_tsd_process.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).unwrap();
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                });
+            },
+        );
     }
     group_tsd_process.finish();
 
@@ -368,16 +436,20 @@ fn benchmark_k8s_infra_ingestion(c: &mut Criterion) {
     for count in line_counts.iter() {
         group_tsd_store.throughput(Throughput::Elements(*count as u64));
         let logs = generate_k8s_infra_logs(*count, seed);
-        group_tsd_store.bench_with_input(BenchmarkId::from_parameter(count), &logs, |b, l: &Vec<String>| { 
-            b.iter(|| {
-                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).unwrap();
-                for line in l.iter() {
-                    drain.process_line(black_box(line.clone()));
-                }
-                let log_groups = drain.collect_all_log_groups(); 
-                let _store = LogStore::from_log_groups(black_box(log_groups));
-            });
-        });
+        group_tsd_store.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &logs,
+            |b, l: &Vec<String>| {
+                b.iter(|| {
+                    let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100).unwrap();
+                    for line in l.iter() {
+                        drain.process_line(black_box(line.clone()));
+                    }
+                    let log_groups = drain.collect_all_log_groups();
+                    let _store = LogStore::from_log_groups(black_box(log_groups));
+                });
+            },
+        );
     }
     group_tsd_store.finish();
 }
