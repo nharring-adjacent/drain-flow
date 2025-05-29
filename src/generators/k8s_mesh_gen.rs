@@ -1,4 +1,3 @@
-//! Generates realistic JSON-formatted logs for Kubernetes service mesh traffic (e.g., Istio, Linkerd, Nginx Ingress).
 // Copyright Nicholas Harring. All rights reserved.
 //
 // This program is free software: you can redistribute it and/or modify it under
@@ -9,131 +8,116 @@
 // Server Side Public License along with this program.
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
+//! Generates realistic JSON-formatted logs for Kubernetes service mesh traffic (e.g., Istio, Linkerd, Nginx Ingress).
+
 use rand::{Rng, SeedableRng, rngs::StdRng};
-use rand::seq::SliceRandom; 
-use rand::prelude::IndexedRandom; // Added for choose method on Vec
-use chrono::{Utc, Duration, SecondsFormat}; // DateTime remains removed
-use serde::Serialize;
-use serde_derive::Serialize; // For derive macro
+use rand::prelude::IndexedRandom; // For .choose()
+// Removed: use rand::seq::SliceRandom; 
+use chrono::{Utc, Duration, SecondsFormat};
+// serde::Serialize trait import removed as derive macro is sufficient and warning indicated it was unused
+use serde_derive::Serialize; // The derive macro
 use serde_json;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
+#[allow(non_snake_case)] // To allow field names like upstreamServiceName
 pub struct K8sMeshLogEntry {
-    pub timestamp: String, 
-    pub level: String,     
-    pub request_id: String, 
-    pub method: String,    
-    pub path: String,      
-    pub protocol: String,  
-    pub status_code: u16,  
-    pub bytes_sent: u64,
-    pub bytes_received: u64,
-    pub duration_ms: u32,  
-    pub upstream_service_name: String, 
-    pub upstream_service_namespace: String, 
-    pub upstream_cluster: String, 
-    pub upstream_host_pod_ip: String, 
-    pub downstream_remote_address: String, 
-    pub downstream_local_address_pod_ip: String, 
-    pub authority: String, 
-    pub user_agent: String,
-    pub x_forwarded_for: Option<String>,
-    pub response_flags: String, 
-    pub tls_version: Option<String>, 
-    pub tls_cipher: Option<String>, 
+    timestamp: String,
+    level: String,
+    request_id: String,
+    method: String,
+    path: String,
+    protocol: String,
+    status_code: u16,
+    bytes_sent: u64,
+    bytes_received: u64,
+    duration_ms: u32,
+    upstream_service_name: String,
+    upstream_service_namespace: String,
+    upstream_cluster: String,
+    upstream_host_pod_ip: String,
+    downstream_remote_address: String,
+    downstream_local_address_pod_ip: String,
+    authority: String,
+    user_agent: String,
+    x_forwarded_for: Option<String>,
+    response_flags: String,
+    tls_version: Option<String>,
+    tls_cipher: Option<String>,
 }
 
-const LEVELS: &[&str] = &["info", "warn", "error"]; // "debug" is often too verbose for access logs
 const HTTP_METHODS: &[&str] = &["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
-const HTTP_PROTOCOLS: &[&str] = &["HTTP/1.1", "HTTP/2.0"];
-const COMMON_PATHS_PREFIX: &[&str] = &["/api/v1", "/api/v2", "/app", "/ui", "/service"];
-const COMMON_PATHS_RESOURCE: &[&str] = &[
-    "users", "products", "orders", "items", "payments", "status", "health", "config", "search", "metrics"
+const COMMON_PATHS_PREFIX: &[&str] = &["/api/v1", "/api/v2", "/app", "/service", "/data"];
+const COMMON_PATHS_RESOURCE: &[&str] = &["users", "products", "orders", "items", "metrics", "status", "config"];
+const COMMON_PATHS_SUFFIX: &[&str] = &["", "/:id", "/:id/summary", "/search", "/stream"];
+const QUERY_PARAMS_KEYS: &[&str] = &["session_id", "user_token", "format", "limit", "offset", "debug"];
+const PROTOCOLS: &[&str] = &["HTTP/1.1", "HTTP/2.0"];
+const STATUS_CODES_WEIGHTED: &[(u16, usize)] = &[ // (status_code, weight)
+    (200, 60), (201, 10), (204, 5), (301, 2), (302, 2), (304, 3),
+    (400, 3), (401, 2), (403, 2), (404, 5), (429, 1),
+    (500, 3), (502, 1), (503, 1), (504, 1),
 ];
-const COMMON_PATHS_SUFFIX: &[&str] = &["", "/:id", "/:id/details", "/bulk", "/stream"];
-const QUERY_PARAMS_KEYS: &[&str] = &["session_id", "user_id", "product_id", "category", "limit", "offset", "q", "filter", "sort_by"];
-
-// Weighted status codes: more 2xx, some 4xx, fewer 5xx/3xx
-const STATUS_CODES: &[(u16, usize)] = &[
-    (200, 50), (201, 10), (204, 5), // OK, Created, No Content
-    (301, 3), (302, 3), (304, 4),   // Redirects, Not Modified
-    (400, 7), (401, 5), (403, 5), (404, 5), (429, 2), // Client Errors
-    (500, 3), (502, 1), (503, 1), (504, 1), // Server Errors
-];
-
-const UPSTREAM_SERVICE_NAMES: &[&str] = &[
-    "product-catalog", "user-authentication", "order-processing", "payment-gateway", "inventory-management", "recommendation-engine", "notification-service"
-];
-const UPSTREAM_SERVICE_NAMESPACES: &[&str] = &["prod-ns", "staging-ns", "dev-ns", "infra-ns"];
-const UPSTREAM_PORTS: &[u16] = &[80, 8080, 9000, 5000, 3000];
-
+const UPSTREAM_SERVICE_NAMES: &[&str] = &["auth-service", "product-catalog", "order-processor", "user-profile", "inventory-cache"];
+const UPSTREAM_SERVICE_NAMESPACES: &[&str] = &["prod-ns", "staging-ns", "dev-ns", "internal-services"];
+const UPSTREAM_PORTS: &[u16] = &[80, 8080, 9000, 50051];
+const AUTHORITIES: &[&str] = &["api.example.com", "shop.example.org", "internal.svc.local", "data-pipeline.internal"];
 const USER_AGENTS: &[&str] = &[
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Safari/605.1.15",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
-    "curl/7.79.1",
-    "PostmanRuntime/7.29.0",
-    "python-requests/2.27.1",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    "curl/7.68.0",
+    "Python-urllib/3.9",
+    "Java/11.0.12 HttpClient",
     "kube-probe/1.23",
-    "gRPC-Java/1.45.0",
-    "Prometheus/2.34.0",
-    "Go-http-client/1.1",
+    "Prometheus/2.30.0",
 ];
-const RESPONSE_FLAGS: &[&str] = &["-", "UH", "UF", "UO", "URX", "NC", "LH", "UT", "LR", "DC"];
+const RESPONSE_FLAGS: &[&str] = &["-", "UH", "UF", "UO", "NR", "DC", "LH", "UT", "LR", "URX", "NC", "DI", "FI", "RL"];
 const TLS_VERSIONS: &[&str] = &["TLSv1.2", "TLSv1.3"];
-const TLS_CIPHERS: &[&str] = &[
-    "AEAD-AES128-GCM-SHA256", "AEAD-AES256-GCM-SHA384", "AEAD-CHACHA20-POLY1305-SHA256",
-    "ECDHE-RSA-AES128-GCM-SHA256", "ECDHE-RSA-AES256-GCM-SHA384", "ECDHE-ECDSA-AES128-GCM-SHA256",
-];
-const AUTHORITIES: &[&str] = &[
-    "shop.example.com", "api.example.com", "internal-service.corp", "my-app.prod-ns.svc.cluster.local", "prometheus-operator.monitoring.svc"
-];
+const TLS_CIPHERS: &[&str] = &["AES128-GCM-SHA256", "AES256-GCM-SHA384", "CHACHA20-POLY1305-SHA256"];
 
 fn generate_pod_ip(rng: &mut StdRng) -> String {
     format!("10.42.{}.{}", rng.random_range(0..256), rng.random_range(1..255))
 }
+
 fn generate_external_ip(rng: &mut StdRng) -> String {
     format!("{}.{}.{}.{}", rng.random_range(1..255), rng.random_range(0..256), rng.random_range(0..256), rng.random_range(1..255))
 }
-
 
 pub fn generate_k8s_mesh_logs(count: usize, seed: u64) -> Vec<String> {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut logs = Vec::with_capacity(count);
     let mut current_time = Utc::now() - Duration::days(rng.random_range(1..5)); // Start up to 5 days ago
 
-    let status_code_choices: Vec<u16> = STATUS_CODES
+    let status_code_choices: Vec<u16> = STATUS_CODES_WEIGHTED
         .iter()
-        .flat_map(|&(val, weight)| std::iter::repeat(val).take(weight))
+        .flat_map(|&(code, weight)| std::iter::repeat(code).take(weight))
         .collect();
 
-    for _i in 0..count {
+    for _ in 0..count {
         current_time += Duration::milliseconds(rng.random_range(50..5000));
-
+        let timestamp = current_time.to_rfc3339_opts(SecondsFormat::Millis, true);
         let method = HTTP_METHODS.choose(&mut rng).unwrap_or(&"GET").to_string();
-        let mut path_str = format!(
-            "{}/{}{}",
+        
+        let mut path_str = format!("{}{}", 
             COMMON_PATHS_PREFIX.choose(&mut rng).unwrap_or(&"/api/v1"),
-            COMMON_PATHS_RESOURCE.choose(&mut rng).unwrap_or(&"items"),
-            COMMON_PATHS_SUFFIX.choose(&mut rng).unwrap_or(&"")
+            COMMON_PATHS_RESOURCE.choose(&mut rng).unwrap_or(&"items")
         );
+        path_str.push_str(COMMON_PATHS_SUFFIX.choose(&mut rng).unwrap_or(&""));
         if path_str.contains(":id") {
             path_str = path_str.replace(":id", &rng.random_range(1..10000).to_string());
         }
         if rng.random_bool(0.4) { // 40% chance of query params
             let num_params = rng.random_range(1..4);
             path_str.push('?');
-            for j in 0..num_params {
+            for i in 0..num_params {
                 path_str.push_str(QUERY_PARAMS_KEYS.choose(&mut rng).unwrap_or(&"param"));
                 path_str.push('=');
                 path_str.push_str(&rng.random_range(1..1000).to_string()); // Simple numeric values for params
-                if j < num_params - 1 {
+                if i < num_params - 1 {
                     path_str.push('&');
                 }
             }
         }
 
+        let protocol = PROTOCOLS.choose(&mut rng).unwrap_or(&"HTTP/1.1").to_string();
         let status_code = *status_code_choices.choose(&mut rng).unwrap_or(&200);
         
         let bytes_sent = if method == "GET" && status_code == 200 { rng.random_range(100..50000) } else { rng.random_range(50..1000) };
@@ -146,35 +130,32 @@ pub fn generate_k8s_mesh_logs(count: usize, seed: u64) -> Vec<String> {
 
         let upstream_service_name = UPSTREAM_SERVICE_NAMES.choose(&mut rng).unwrap_or(&"unknown-service").to_string();
         let upstream_service_namespace = UPSTREAM_SERVICE_NAMESPACES.choose(&mut rng).unwrap_or(&"default-ns").to_string();
-        let upstream_port = UPSTREAM_PORTS.choose(&mut rng).unwrap_or(&8080);
-        let upstream_cluster = format!(
-            "outbound|{}||{}.{}.svc.cluster.local",
-            upstream_port, upstream_service_name, upstream_service_namespace
-        );
+        let upstream_port = *UPSTREAM_PORTS.choose(&mut rng).unwrap_or(&8080);
+        let upstream_cluster = format!("outbound|{}||{}.{}.svc.cluster.local", upstream_port, upstream_service_name, upstream_service_namespace);
         let upstream_host_pod_ip = format!("{}:{}", generate_pod_ip(&mut rng), upstream_port);
-        
+
         let downstream_is_pod = rng.random_bool(0.8); // 80% of traffic from other pods
         let downstream_remote_address = if downstream_is_pod {
             format!("{}:{}", generate_pod_ip(&mut rng), rng.random_range(30000..60000))
         } else {
             format!("{}:{}", generate_external_ip(&mut rng), rng.random_range(10000..60000))
         };
-        let downstream_local_address_pod_ip = format!("{}:{}", generate_pod_ip(&mut rng), UPSTREAM_PORTS.choose(&mut rng).unwrap_or(&80));
-
+        let downstream_local_address_pod_ip = format!("{}:{}", generate_pod_ip(&mut rng), *UPSTREAM_PORTS.choose(&mut rng).unwrap_or(&80));
+        
         let authority = AUTHORITIES.choose(&mut rng).unwrap_or(&"default.example.com").to_string();
         let user_agent = USER_AGENTS.choose(&mut rng).unwrap_or(&"Unknown").to_string();
         
         let x_forwarded_for = if !downstream_is_pod && rng.random_bool(0.7) { // 70% of external traffic has XFF
-            Some(generate_external_ip(&mut rng))
+            Some(downstream_remote_address.split(':').next().unwrap_or("").to_string())
         } else if downstream_is_pod && rng.random_bool(0.2) { // 20% of internal traffic might have XFF (e.g. internal LB)
-             Some(format!("{}, {}", generate_pod_ip(&mut rng), generate_pod_ip(&mut rng))) // chain of internal XFF
+            Some(format!("{}, {}", generate_external_ip(&mut rng), generate_pod_ip(&mut rng)))
         }
         else {
             None
         };
 
         let response_flags = RESPONSE_FLAGS.choose(&mut rng).unwrap_or(&"-").to_string();
-
+        
         let (tls_version, tls_cipher) = if rng.random_bool(0.9) { // 90% of requests use TLS
             (
                 Some(TLS_VERSIONS.choose(&mut rng).unwrap_or(&"TLSv1.2").to_string()),
@@ -183,19 +164,20 @@ pub fn generate_k8s_mesh_logs(count: usize, seed: u64) -> Vec<String> {
         } else {
             (None, None)
         };
-        
-        let level = if status_code >= 500 { "error".to_string() } 
-                    else if status_code >= 400 { "warn".to_string() } 
-                    else { LEVELS.choose(&mut rng).unwrap_or(&"info").to_string() };
 
+        let level = match status_code {
+            s if s >= 500 => "error".to_string(),
+            s if s >= 400 => "warn".to_string(),
+            _ => "info".to_string(),
+        };
 
         let entry = K8sMeshLogEntry {
-            timestamp: current_time.to_rfc3339_opts(SecondsFormat::Millis, true),
+            timestamp,
             level,
             request_id: Uuid::new_v4().to_string(),
             method,
             path: path_str,
-            protocol: HTTP_PROTOCOLS.choose(&mut rng).unwrap_or(&"HTTP/1.1").to_string(),
+            protocol,
             status_code,
             bytes_sent,
             bytes_received,
@@ -214,11 +196,9 @@ pub fn generate_k8s_mesh_logs(count: usize, seed: u64) -> Vec<String> {
             tls_cipher,
         };
 
-        match serde_json::to_string(&entry) {
-            Ok(json_string) => logs.push(json_string),
-            Err(e) => eprintln!("Failed to serialize K8sMeshLogEntry: {}", e), // Should not happen with valid struct
-        }
+        logs.push(serde_json::to_string(&entry).unwrap_or_else(|e| format!(r#"{{"error":"serialization failed: {}"}}"#, e)));
     }
-
     logs
 }
+
+```
