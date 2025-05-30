@@ -63,7 +63,7 @@ fn benchmark_mysql_queries(c: &mut Criterion) {
                 && lg.count() > 10
                 && lg.log_template().contains("Query_time")
         })
-        .map(|lg| lg.id())
+        .map(|lg| lg.id)
         .expect("No suitable log group found for MySQL QRA. Adjust criteria or seed.");
 
     let mut group_qra = c.benchmark_group("MySQL_QRA_ById_NarrowTime");
@@ -174,7 +174,7 @@ fn benchmark_rails_queries(c: &mut Criterion) {
         )
         .iter()
         .find(|lg| lg.log_template().contains("UsersController#index"))
-        .map(|lg| lg.id())
+        .map(|lg| lg.id)
         .expect(
             "No suitable log group for Rails QRA (UsersController#index). Adjust criteria/seed.",
         );
@@ -243,7 +243,7 @@ fn benchmark_syslog_queries(c: &mut Criterion) {
         .get_log_groups_in_range(Utc::now() - ChronoDuration::days(40), Utc::now())
         .iter()
         .find(|lg| lg.log_template().contains("kernel:") && lg.count() > 5)
-        .map(|lg| lg.id())
+        .map(|lg| lg.id)
         .expect("No suitable log group for Syslog QRA (kernel). Adjust criteria/seed.");
 
     let mut group_qra_kernel = c.benchmark_group("Syslog_QRA_KernelMessages");
@@ -383,7 +383,7 @@ fn benchmark_k8s_infra_queries(c: &mut Criterion) {
             (lg.log_template().contains("Event(") || lg.log_template().contains("event="))
                 && lg.count() > 2
         })
-        .map(|lg| lg.id())
+        .map(|lg| lg.id)
         .expect("No suitable log group for K8s Infra QRA (Event). Adjust criteria/seed.");
 
     let mut group_qra_k8s_event = c.benchmark_group("K8sInfra_QRA_ApiServerEvents");
