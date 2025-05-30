@@ -316,29 +316,29 @@ fn generate_message_for_app(
             ); // Corrected comparison
             message = message.replace(
                 "{op}",
-                *["open", "connect", "mkdir"].choose(rng).unwrap_or(&"open"),
+                ["open", "connect", "mkdir"].choose(rng).unwrap_or(&"open"),
             );
             message = message.replace(
                 "{profile}",
-                *["/usr/sbin/sssd", "snap.docker.dockerd"]
+                ["/usr/sbin/sssd", "snap.docker.dockerd"]
                     .choose(rng)
                     .unwrap_or(&"/usr/sbin/sssd"),
             );
             message = message.replace(
                 "{name}",
-                *["/etc/krb5.keytab", "/var/log/messages"]
+                ["/etc/krb5.keytab", "/var/log/messages"]
                     .choose(rng)
                     .unwrap_or(&"/etc/krb5.keytab"),
             );
             message = message.replace("{pid_val}", &rng.random_range(100..99999).to_string());
             message = message.replace(
                 "{comm}",
-                *["sssd_be", "dockerd", "anacron"]
+                ["sssd_be", "dockerd", "anacron"]
                     .choose(rng)
                     .unwrap_or(&"sssd_be"),
             );
-            message = message.replace("{req_mask}", *["r", "rw", "w"].choose(rng).unwrap_or(&"r"));
-            message = message.replace("{den_mask}", *["r", "w"].choose(rng).unwrap_or(&"r"));
+            message = message.replace("{req_mask}", ["r", "rw", "w"].choose(rng).unwrap_or(&"r"));
+            message = message.replace("{den_mask}", ["r", "w"].choose(rng).unwrap_or(&"r"));
             message = message.replace("{fsuid}", &rng.random_range(0..1000).to_string());
             message = message.replace("{ouid}", &rng.random_range(0..1000).to_string());
             message = message.replace("{ata_id}", ATA_ID.choose(rng).unwrap_or(&"1"));
@@ -349,7 +349,7 @@ fn generate_message_for_app(
             message = message.replace("{bytes}", &rng.random_range(128..1024).to_string());
             message = message.replace(
                 "{device}",
-                *["sda1", "nvme0n1p2", "vda"].choose(rng).unwrap_or(&"sda1"),
+                ["sda1", "nvme0n1p2", "vda"].choose(rng).unwrap_or(&"sda1"),
             );
             message = message.replace(
                 "{input_device_name}",
@@ -379,7 +379,7 @@ fn generate_message_for_app(
                     )
                 }
                 "offset" | "delay" | "jitter" | "poll" => {
-                    let val = rng.random_range(0.001..0.5) as f64;
+                    let val = rng.random_range(0.001..0.5);
                     format!("{} {:.6} sec", action_ref, val)
                 }
                 _ => format!("{} some_value", action_ref),
@@ -502,7 +502,7 @@ fn generate_message_for_app(
         }
         "nfsd" => {
             if rng.random_bool(0.3) {
-                format!("RPC: Dentry cache is full")
+                "RPC: Dentry cache is full".to_string()
             } else if rng.random_bool(0.3) {
                 let client_host = NFSD_HOSTNAMES.choose(rng).unwrap_or(&"client.host");
                 format!("lockd: server {} not responding, still trying", client_host)
@@ -592,7 +592,7 @@ fn generate_message_for_app(
                 level_char, klog_ts, thread_id, component, line_num, message_body
             )
         }
-        "vector-agent" => format!("INFO vector::shutdown: Vector has stopped."),
+        "vector-agent" => "INFO vector::shutdown: Vector has stopped.".to_string(),
         _ => format!(
             "Generic message for {} - ID: {}",
             app_name,

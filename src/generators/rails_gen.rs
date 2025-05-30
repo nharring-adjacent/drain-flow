@@ -276,7 +276,7 @@ fn generate_rails_request_logs(
 
         *base_time += Duration::microseconds(rng.random_range(100..5000));
         let total_duration_ms = rng.random_range(10.0..500.0) as f32;
-        let active_record_ms = rng.random_range(1.0..(total_duration_ms * 0.6).max(1.1)) as f32;
+        let active_record_ms = rng.random_range(1.0..(total_duration_ms * 0.6).max(1.1));
         let allocations = rng.random_range(5000..50000);
         logs.push(format_log_line(*base_time, Severity::INFO, &context.request_id, context.pid,
             &format!("Completed 200 OK in {:.0}ms (Views: {:.1}ms | ActiveRecord: {:.1}ms | Allocations: {})", 

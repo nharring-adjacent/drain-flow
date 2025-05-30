@@ -10,7 +10,7 @@
 
 //! Generates realistic klog-formatted logs for Kubernetes infrastructure components (e.g., Kubelet, API server).
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use rand::prelude::IndexedRandom;
 use rand::{rngs::StdRng, Rng, SeedableRng}; // SliceRandom removed as IndexedRandom should cover .choose() on slices // For .choose()
                                             // Removed: use rand::seq::SliceRandom;
@@ -239,7 +239,7 @@ fn generate_message_for_component(
                     format!("\"Adding pod to network\" pod=\"{}\"", pod_obj.to_namespaced_name()),
                     format!("\"Updating status for pod\" pod=\"{}\" status={{phase:\"{}\"}}", pod_obj.to_namespaced_name(), ["Running", "Succeeded"].choose(rng).unwrap_or(&"Running")),
                     format!("\"Image GC completed\" images_deleted={} bytes_reclaimed={}", rng.random_range(0..5), rng.random_range(0..1024*1024*500)),
-                    format!("\"Starting PLEG\""),
+                    "\"Starting PLEG\"".to_string(),
                     format!("\"Podsandbox changed\" pod=\"{}\" sandbox=\"{}\"", pod_obj.to_namespaced_name(), Uuid::new_v4().to_string().chars().take(12).collect::<String>()),
                 ];
                 messages
@@ -253,7 +253,7 @@ fn generate_message_for_component(
                     format!("\"Pod sync failed\" pod=\"{}\" err=\"{}\"", pod_obj.to_namespaced_name(), error_msg_snippet),
                     format!("\"Failed to update node status\" err=\"timeout attempting to reach API server: {}\"", error_msg_snippet),
                     format!("\"Container runtime network not ready\" networkReady=\"false\" message=\"{}\"", error_msg_snippet),
-                    format!("\"Eviction manager: attempting to reclaim\" resourceName=\"memory\""),
+                    "\"Eviction manager: attempting to reclaim\" resourceName=\"memory\"".to_string(),
                     format!("\"PLEG is not healthy: pleg was last seen active {}, but is now {}", Duration::seconds(rng.random_range(60..300)).num_seconds(), Duration::seconds(rng.random_range(5..59)).num_seconds()),
                 ];
                 messages
@@ -424,7 +424,7 @@ fn generate_message_for_component(
                         "\"Syncing iptables rules\" rule_count={}",
                         rng.random_range(100..5000)
                     ),
-                    format!("\"Successfully synced iptables rules\""),
+                    "\"Successfully synced iptables rules\"".to_string(),
                     format!(
                         "\"Adding new service\" service=\"{}/{}\" ip=\"10.0.1.2\" port=\"80\"",
                         pod_obj.namespace, pod_obj.name
@@ -492,12 +492,12 @@ pub fn generate_k8s_infra_logs(count: usize, seed: u64) -> Vec<String> {
     let mut current_time = Utc::now() - Duration::days(rng.random_range(1..7));
 
     let components_files: Vec<(&str, &[&str])> = vec![
-        ("kubelet", &KUBELET_FILES),
-        ("kube-apiserver", &APISERVER_FILES),
-        ("kube-scheduler", &SCHEDULER_FILES),
-        ("etcd", &ETCD_FILES),
-        ("kube-controller-manager", &CONTROLLERMANAGER_FILES),
-        ("kube-proxy", &KUBEPROXY_FILES),
+        ("kubelet", KUBELET_FILES),
+        ("kube-apiserver", APISERVER_FILES),
+        ("kube-scheduler", SCHEDULER_FILES),
+        ("etcd", ETCD_FILES),
+        ("kube-controller-manager", CONTROLLERMANAGER_FILES),
+        ("kube-proxy", KUBEPROXY_FILES),
     ];
 
     for _ in 0..count {

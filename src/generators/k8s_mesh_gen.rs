@@ -137,7 +137,7 @@ pub fn generate_k8s_mesh_logs(count: usize, seed: u64) -> Vec<String> {
 
     let status_code_choices: Vec<u16> = STATUS_CODES_WEIGHTED
         .iter()
-        .flat_map(|&(code, weight)| std::iter::repeat(code).take(weight))
+        .flat_map(|&(code, weight)| std::iter::repeat_n(code, weight))
         .collect();
 
     for _ in 0..count {
