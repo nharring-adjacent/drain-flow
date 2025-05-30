@@ -14,9 +14,9 @@ extern crate custom_derive;
 extern crate enum_derive;
 
 pub mod drains;
+pub mod generators;
 pub mod log_group;
 pub mod record;
-pub mod generators;
 
 /// # Log Querying
 ///

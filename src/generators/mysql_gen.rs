@@ -10,19 +10,31 @@
 
 //! Generates realistic MySQL slow query log entries.
 
-use chrono::{Duration, Utc, SecondsFormat};
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use chrono::{Duration, SecondsFormat, Utc};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 // Removed: use rand::seq::SliceRandom; // Not used in this version
 
 const USERS: &[&str] = &["root", "app_user", "backup_user", "reporting_user"];
-const HOSTS: &[&str] = &["localhost", "db_server.example.com", "10.0.1.23", "web_app_server"];
+const HOSTS: &[&str] = &[
+    "localhost",
+    "db_server.example.com",
+    "10.0.1.23",
+    "web_app_server",
+];
 const CLIENT_IPS: &[&str] = &["192.168.1.100", "10.0.5.12", "172.16.30.5", ""]; // Empty string for no IP
-const QUERIES: &[(&str, usize)] = &[ // (Query, ComplexityFactor: higher means more complex/slower)
+const QUERIES: &[(&str, usize)] = &[
+    // (Query, ComplexityFactor: higher means more complex/slower)
     ("SELECT * FROM users WHERE id = ?;", 50),
-    ("SELECT * FROM products WHERE category = ? ORDER BY price DESC;", 100),
+    (
+        "SELECT * FROM products WHERE category = ? ORDER BY price DESC;",
+        100,
+    ),
     ("UPDATE orders SET status = ? WHERE id = ?;", 80),
     ("INSERT INTO logs (level, message) VALUES (?, ?);", 30),
-    ("SELECT COUNT(*) FROM large_table WHERE created_at > ? AND status = ?;", 200),
+    (
+        "SELECT COUNT(*) FROM large_table WHERE created_at > ? AND status = ?;",
+        200,
+    ),
     ("DELETE FROM sessions WHERE last_seen < ?;", 60),
     ("CALL process_daily_report(?);", 300),
     ("SELECT @@version_comment LIMIT 1;", 5),
@@ -77,20 +89,26 @@ pub fn generate_mysql_slow_query_logs(count: usize, seed: u64) -> Vec<String> {
         let user = USERS[user_index].to_string();
         let host_index = rng.random_range(0..HOSTS.len());
         let host = HOSTS[host_index].to_string();
-        
+
         let client_ip_index = rng.random_range(0..CLIENT_IPS.len());
         let client_ip_str = CLIENT_IPS[client_ip_index];
-        let client_ip = if client_ip_str.is_empty() { None } else { Some(client_ip_str.to_string()) };
+        let client_ip = if client_ip_str.is_empty() {
+            None
+        } else {
+            Some(client_ip_str.to_string())
+        };
 
         let query_index = rng.random_range(0..QUERIES.len());
         let (query_template, query_complexity_factor) = QUERIES[query_index];
-        
-        // Simulate query parameters (simple replacement for now)
-        let query = query_template.replace("?", &format!("'param_val_{}'", rng.random_range(1..1000)));
 
-        let base_query_time: f64 = rng.random_range(0.1..2.0) + (query_complexity_factor as f64 / 100.0);
+        // Simulate query parameters (simple replacement for now)
+        let query =
+            query_template.replace("?", &format!("'param_val_{}'", rng.random_range(1..1000)));
+
+        let base_query_time: f64 =
+            rng.random_range(0.1..2.0) + (query_complexity_factor as f64 / 100.0);
         let is_slow_query: bool = rng.random_bool(0.2); // 20% chance of being a "slow" query beyond base time
-        
+
         let query_time = if is_slow_query {
             base_query_time * rng.random_range(5.0..20.0) // Significantly longer for slow queries
         } else {
