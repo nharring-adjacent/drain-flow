@@ -10,7 +10,7 @@
 
 use chrono::Utc;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use drain_flow::drains::simple::SingleLayer;
+use drain_flow::drains::{api::Drain, simple::SingleLayer}; // Added api::Drain
 use generators::{RecordTemplate, Sendmail};
 use rand::Rng;
 
@@ -46,7 +46,7 @@ pub fn benchmark_sink(c: &mut Criterion) {
             |b, lines| {
                 b.iter(|| {
                     for l in lines {
-                        drain.process_line(l.to_string()).unwrap();
+                        Drain::process_line(&mut drain, l.to_string()).unwrap(); // Updated call
                     }
                 });
             },
