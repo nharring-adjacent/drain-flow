@@ -22,7 +22,7 @@ pub struct LogMessage {
 
 /// Represents a log message after preprocessing and tokenization.
 /// Tokens are expected to be interned strings, but stored as actual strings or symbols.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ProcessedLogMessage {
     pub original_message_id: Uuid, // Link back to an original LogMessage or a unique ID generated for it
     pub tokens: Vec<String>, // Or Vec<DefaultSymbol> if using string_interner directly here
@@ -132,17 +132,17 @@ impl Drain for DifferentialDrain {
 
             // Generalize Template
             let mut new_template = cluster.log_template.clone();
-            let mut concrete_tokens_count = 0;
-            let mut wildcards_introduced_this_step = 0;
+            let mut _concrete_tokens_count = 0; // Prefixed with underscore
+            let mut _wildcards_introduced_this_step = 0; // Prefixed with underscore
 
             for i in 0..new_template.len() {
                 match &new_template[i] {
                     TokenOrWildcard::Token(template_token_val) => {
                         if template_token_val != &processed_message.tokens[i] {
                             new_template[i] = TokenOrWildcard::Wildcard;
-                            wildcards_introduced_this_step += 1;
+                            _wildcards_introduced_this_step += 1; // Prefixed with underscore
                         } else {
-                            concrete_tokens_count += 1;
+                            _concrete_tokens_count += 1; // Prefixed with underscore
                         }
                     }
                     TokenOrWildcard::Wildcard => {
@@ -296,11 +296,13 @@ impl Drain for DifferentialDrain {
                 // Note: The Record's ID is generated internally by `Record::new`.
                 // We need a way to make this ID the group_id or have LogGroup generate its own.
                 // For now, LogGroup will generate its own ID. The base_record_id in LogGroup can refer to this.
-                let base_record = Record::new_with_id(cluster.cluster_id, representative_line);
+                // Corrected: Use Record::new()
+                let base_record = Record::new(representative_line.clone());
 
 
                 let mut log_group = LogGroup::new(base_record);
-                log_group.count = cluster.count; // Set the count from the cluster
+                log_group.id = cluster.cluster_id; // Set LogGroup.id from cluster.cluster_id
+                // Removed: log_group.count = cluster.count; (LogGroup::count() is a method)
 
                 // **Add Examples:**
                 // For each `ProcessedLogMessage` in `cluster.samples`:
@@ -309,7 +311,8 @@ impl Drain for DifferentialDrain {
                     let example_line = p_msg.tokens.join(" ");
                     // Create a `Record` from this string.
                     // Use p_msg.original_message_id for the Record's ID.
-                    let example_record = Record::new_with_id(p_msg.original_message_id, example_line);
+                    // Corrected: Use Record::new()
+                    let example_record = Record::new(example_line.clone());
                     log_group.add_example(example_record);
                 }
                 log_group
