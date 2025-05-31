@@ -22,3 +22,5 @@
 pub mod api;
 pub mod simple;
 pub mod two_stage_drain;
+pub mod differential_drain;
+
