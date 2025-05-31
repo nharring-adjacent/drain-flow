@@ -157,7 +157,7 @@ impl fmt::Display for LogGroup {
         write!(
             f,
             "LogGroup ID: {}\nFirst Seen: {}\nEvent: {}\n{} examples and {} wildcards\n",
-            self.event.uid, // Changed from serialize()
+            self.event.uid,  // Changed from serialize()
             self.get_time(), // Changed from self.event.uid.get_time() to use the struct's method
             self.event,
             self.examples.len(),

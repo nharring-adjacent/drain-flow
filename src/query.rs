@@ -8,53 +8,93 @@
 // Server Side Public License along with this program.
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
+//! # Log Querying System
+//!
+//! This module provides structures and functions for querying log data.
+//! The central component is the [`LogStore`], which acts as an abstraction layer
+//! over a log data source, represented by an implementation of the [`Drain`](crate::drains::api::Drain) trait.
+//!
+//! It also defines LogQL (Log Query Language) related structures like [`LogQlQuery`],
+//! [`StreamSelector`], and [`LineFilter`] to enable structured querying of logs.
+
+use crate::drains::api::Drain;
 use crate::log_group::LogGroup;
 use crate::record::Record;
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
+// Removed HashMap import as log_groups field is removed
 use uuid::Uuid; // Added for function return type and usage
 
+/// A generic log data store that interacts with a log source via the [`Drain`] trait.
+///
+/// `LogStore` provides an interface to query log groups and records. It is generic
+/// over `D: Drain`, meaning it can work with any concrete drain implementation
+/// that provides log data (e.g., in-memory drains, file-based drains).
+///
+/// Log groups are fetched dynamically from the underlying drain when queried.
 #[derive(Debug, Clone)]
-pub struct LogStore {
-    log_groups: HashMap<Uuid, LogGroup>,
+pub struct LogStore<D: Drain> {
+    drain: D,
 }
 
-impl Default for LogStore {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Default implementation removed as Drain doesn't have a Default bound
 
-impl LogStore {
-    pub fn new() -> Self {
-        Self {
-            log_groups: HashMap::new(),
-        }
-    }
-
-    pub fn add_log_group(&mut self, log_group: LogGroup) {
-        self.log_groups.insert(log_group.id, log_group);
+impl<D: Drain> LogStore<D> {
+    /// Creates a new `LogStore` with the given drain.
+    ///
+    /// # Parameters
+    ///
+    /// * `drain`: An instance of a type implementing the `Drain` trait, which will
+    ///   serve as the source of log data for this store.
+    pub fn new(drain: D) -> Self {
+        Self { drain }
     }
 
-    pub fn from_log_groups(groups: impl IntoIterator<Item = LogGroup>) -> Self {
-        let mut store = Self::new();
-        for group in groups {
-            store.add_log_group(group);
-        }
-        store
+    // add_log_group removed as LogStore is initialized with a Drain instance
+
+    // from_log_groups removed as LogStore is initialized with a Drain instance
+
+    /// Retrieves a specific `LogGroup` by its ID.
+    ///
+    /// This method queries the underlying drain for all its log groups and then
+    /// searches for the one with the matching ID.
+    ///
+    /// # Parameters
+    ///
+    /// * `id`: The `Uuid` of the `LogGroup` to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// An `Option<LogGroup>` containing the found log group, or `None` if no
+    /// group with the specified ID exists in the drain. The `LogGroup` is returned by value.
+    pub fn get_log_group_by_id(&self, id: Uuid) -> Option<LogGroup> {
+        self.drain
+            .collect_log_groups()
+            .into_iter()
+            .find(|lg| lg.id == id)
     }
 
-    pub fn get_log_group_by_id(&self, id: Uuid) -> Option<&LogGroup> {
-        self.log_groups.get(&id)
-    }
-
+    /// Retrieves all `LogGroup`s that fall within a specified time range.
+    ///
+    /// This method queries the underlying drain for all its log groups and then
+    /// filters them based on their timestamp.
+    ///
+    /// # Parameters
+    ///
+    /// * `start_time`: The `DateTime<Utc>` marking the beginning of the time range (inclusive).
+    /// * `end_time`: The `DateTime<Utc>` marking the end of the time range (inclusive).
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<LogGroup>` containing all log groups whose timestamp is within the
+    /// specified range. The `LogGroup`s are returned by value.
     pub fn get_log_groups_in_range(
         &self,
         start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
-    ) -> Vec<&LogGroup> {
-        self.log_groups
-            .values()
+    ) -> Vec<LogGroup> {
+        self.drain
+            .collect_log_groups()
+            .into_iter()
             .filter(|log_group| {
                 let timestamp = log_group.get_time();
                 timestamp >= start_time && timestamp <= end_time
@@ -87,15 +127,34 @@ pub enum QuerySource {
     // This was part of the original definitions to be restored
 }
 
-pub fn execute_logql_query<'a>(log_store: &'a LogStore, query: &LogQlQuery) -> Vec<&'a Record> {
-    let mut records_batch: Vec<&'a Record> = Vec::new();
+/// Executes a LogQL query against the provided `LogStore`.
+///
+/// This function processes a [`LogQlQuery`], retrieving records from the specified
+/// log groups and applying any defined filters. It is generic over `D: Drain`
+/// because `LogStore` is generic.
+///
+/// Due to lifetime considerations with the `Drain` trait (which returns owned `LogGroup`s),
+/// this function returns a `Vec<Record>` (i.e., cloned, owned records) rather than references.
+///
+/// # Parameters
+///
+/// * `log_store`: A reference to the `LogStore` instance to query.
+/// * `query`: A reference to the `LogQlQuery` defining the selection and filtering criteria.
+///
+/// # Returns
+///
+/// A `Vec<Record>` containing all records that match the query criteria.
+pub fn execute_logql_query<D: Drain>(log_store: &LogStore<D>, query: &LogQlQuery) -> Vec<Record> {
+    let mut records_batch: Vec<Record> = Vec::new();
+
+    let collected_groups = log_store.drain.collect_log_groups();
 
     match &query.selector {
         StreamSelector::LogGroupIds(group_ids) => {
             for group_id in group_ids {
-                if let Some(log_group) = log_store.get_log_group_by_id(*group_id) {
-                    records_batch.push(log_group.base_record()); // Add the base record
-                    records_batch.extend(log_group.examples().iter()); // Add all example records
+                if let Some(log_group) = collected_groups.iter().find(|lg| lg.id == *group_id) {
+                    records_batch.push(log_group.base_record().clone()); // Clone base record
+                    records_batch.extend(log_group.examples().iter().cloned()); // Clone example records
                 }
             }
         }
@@ -108,31 +167,52 @@ pub fn execute_logql_query<'a>(log_store: &'a LogStore, query: &LogQlQuery) -> V
     records_batch
 }
 
-pub fn query_log_range_aggregation<'a>(
-    log_store: &'a LogStore,
-    query_source: QuerySource, // Changed parameter
+/// Aggregates log records based on a query source and a time range.
+///
+/// This function retrieves records either by a specific log group ID or by a LogQL query,
+/// and then filters these records to include only those within the specified time range.
+/// It is generic over `D: Drain` due to its use of `LogStore`.
+///
+/// Similar to `execute_logql_query`, this function returns `Vec<Record>` (cloned records)
+/// to manage lifetimes correctly with data sourced from the `Drain`.
+///
+/// # Parameters
+///
+/// * `log_store`: A reference to the `LogStore` instance.
+/// * `query_source`: A [`QuerySource`] enum indicating whether to fetch records by ID or by a LogQL query.
+/// * `start_time`: The `DateTime<Utc>` start of the aggregation range.
+/// * `end_time`: The `DateTime<Utc>` end of the aggregation range.
+///
+/// # Returns
+///
+/// A `Vec<Record>` containing all records that match the query source and fall within the time range.
+pub fn query_log_range_aggregation<D: Drain>(
+    log_store: &LogStore<D>,
+    query_source: QuerySource,
     start_time: DateTime<Utc>,
     end_time: DateTime<Utc>,
-) -> Vec<&'a Record> {
-    let initial_records: Vec<&'a Record> = match query_source {
+) -> Vec<Record> {
+    let initial_records: Vec<Record> = match query_source {
         QuerySource::ById(group_id) => {
-            log_store
-                .get_log_group_by_id(group_id)
-                .map_or(vec![], |log_group| {
-                    let mut records = vec![log_group.base_record()];
-                    records.extend(log_group.examples().iter());
+            log_store.get_log_group_by_id(group_id).map_or_else(
+                Vec::new, // If group not found, return empty vec
+                |log_group| {
+                    // If group found, collect its records (cloned)
+                    let mut records = vec![log_group.base_record().clone()];
+                    records.extend(log_group.examples().iter().cloned());
                     records
-                })
+                },
+            )
         }
         QuerySource::ByLogQl(logql_query) => {
-            // Ensure execute_logql_query is called with a reference
-            execute_logql_query(log_store, &logql_query)
+            execute_logql_query(log_store, &logql_query) // Already returns Vec<Record>
         }
     };
 
     initial_records
         .into_iter()
         .filter(|record| {
+            // record is now Record, not &Record
             record.uid.get_timestamp().is_some_and(|ts| {
                 let (secs_u64, nanos) = ts.to_unix();
                 let secs_i64 = secs_u64 as i64;
@@ -154,10 +234,11 @@ mod tests {
     use proptest::collection::vec as prop_vec; // Added for proptest
     use proptest::prelude::*; // Added for proptest
     use proptest::sample::subsequence; // Added for subsequence
-    use std::collections::HashSet; // Added for proptest
+    use std::collections::{HashMap, HashSet}; // Added for proptest, HashMap for mock drain
     use std::thread::sleep;
     use std::time::Duration as StdDuration;
     use uuid::{Uuid, Version}; // Added for proptest
+                               // Removed unused import: use crate::drains::simple::SingleLayer;
 
     // Helper to create a record and get its timestamp
     fn get_record_timestamp(record: &Record) -> Option<DateTime<Utc>> {
@@ -178,7 +259,7 @@ mod tests {
 
     // Strategy for Record
     fn arb_record() -> impl Strategy<Value = Record> {
-        arb_record_content().prop_map(|content| Record::new(content))
+        arb_record_content().prop_map(Record::new)
     }
 
     // Strategy for LineFilter
@@ -313,60 +394,49 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_log_store_new_and_add() {
-        let mut store = LogStore::new();
-        assert_eq!(store.log_groups.len(), 0, "New LogStore should be empty");
+    // Mock Drain for testing LogStore
+    #[derive(Clone)] // Added Clone
+    struct MockDrain {
+        groups: HashMap<Uuid, LogGroup>,
+    }
 
-        let record = Record::new("Test record for new_and_add".to_string());
-        let log_group = LogGroup::new(record);
-        let group_id = log_group.id;
+    impl MockDrain {
+        fn new() -> Self {
+            Self {
+                groups: HashMap::new(),
+            }
+        }
 
-        store.add_log_group(log_group);
-        assert_eq!(
-            store.log_groups.len(),
-            1,
-            "LogStore should have one group after adding"
-        );
+        #[allow(dead_code)] // This method is used in tests that might be temporarily commented out
+        fn add_group(&mut self, group: LogGroup) {
+            self.groups.insert(group.id, group);
+        }
+    }
 
-        let retrieved_group = store.get_log_group_by_id(group_id);
-        assert!(
-            retrieved_group.is_some(),
-            "Should retrieve the added log group"
-        );
-        assert_eq!(
-            retrieved_group.unwrap().id,
-            group_id,
-            "Retrieved group ID should match"
-        );
+    impl Drain for MockDrain {
+        fn process_line(&mut self, _line: String) -> anyhow::Result<bool> {
+            // Not used in these LogStore tests
+            Ok(false)
+        }
+
+        fn collect_log_groups(&self) -> Vec<LogGroup> {
+            self.groups.values().cloned().collect()
+        }
     }
 
     #[test]
-    fn test_log_store_from_log_groups() {
-        let record1 = Record::new("Record 1 for from_log_groups".to_string());
-        let group1 = LogGroup::new(record1);
-        let id1 = group1.id;
-
-        sleep(StdDuration::from_millis(10));
-        let record2 = Record::new("Record 2 for from_log_groups".to_string());
-        let group2 = LogGroup::new(record2);
-        let id2 = group2.id;
-
-        let groups = vec![group1, group2]; // group1 and group2 are moved here
-        let store = LogStore::from_log_groups(groups);
-
-        assert_eq!(
-            store.log_groups.len(),
-            2,
-            "LogStore should contain two groups"
-        );
+    fn test_log_store_new() {
+        let mock_drain = MockDrain::new();
+        let store = LogStore::new(mock_drain);
+        // Basic check: new store with an empty drain should yield no groups.
+        // Further checks depend on how LogStore interacts with Drain,
+        // e.g., if it immediately collects groups or does so on demand.
+        // For now, just ensuring it can be created.
         assert!(
-            store.get_log_group_by_id(id1).is_some(),
-            "Group 1 should be in the store"
-        );
-        assert!(
-            store.get_log_group_by_id(id2).is_some(),
-            "Group 2 should be in the store"
+            store
+                .get_log_groups_in_range(Utc::now(), Utc::now())
+                .is_empty(),
+            "New LogStore with empty drain should have no groups in range"
         );
     }
 
@@ -376,13 +446,15 @@ mod tests {
         let group1 = LogGroup::new(record1);
         let id1 = group1.id;
 
-        let store = LogStore::from_log_groups(vec![group1]);
+        let mut mock_drain = MockDrain::new();
+        mock_drain.add_group(group1.clone()); // Clone group1 as it's used later
+        let store = LogStore::new(mock_drain);
 
         let found_group = store.get_log_group_by_id(id1);
         assert!(found_group.is_some(), "Should find existing group by ID");
         assert_eq!(found_group.unwrap().id, id1);
 
-        let non_existent_id = Uuid::new_v4(); // Different type of UUID, but fine for testing non-existence
+        let non_existent_id = Uuid::new_v4();
         let not_found_group = store.get_log_group_by_id(non_existent_id);
         assert!(
             not_found_group.is_none(),
@@ -392,48 +464,31 @@ mod tests {
 
     #[test]
     fn test_log_store_get_in_range() {
-        let mut groups_to_add = Vec::new();
+        let mut mock_drain = MockDrain::new();
         let base_time = Utc::now();
 
-        // Create groups with timestamps approximately 100ms apart
         let r1 = Record::new("g1".to_string());
-        let g1 = LogGroup::new(r1); // ~base_time
-        let id1 = g1.id;
-        groups_to_add.push(g1);
-        sleep(StdDuration::from_millis(100));
+        let g1 = LogGroup::new(r1);
+        let time1 = g1.get_time();
+        mock_drain.add_group(g1.clone());
+        sleep(StdDuration::from_millis(100)); // Ensure timestamps are distinct
 
         let r2 = Record::new("g2".to_string());
-        let g2 = LogGroup::new(r2); // ~base_time + 100ms
-        let id2 = g2.id;
-        groups_to_add.push(g2);
+        let g2 = LogGroup::new(r2);
+        let time2 = g2.get_time();
+        mock_drain.add_group(g2.clone());
         sleep(StdDuration::from_millis(100));
 
         let r3 = Record::new("g3".to_string());
-        let g3 = LogGroup::new(r3); // ~base_time + 200ms
-        let id3 = g3.id;
-        groups_to_add.push(g3);
+        let g3 = LogGroup::new(r3);
+        let time3 = g3.get_time();
+        mock_drain.add_group(g3.clone());
 
-        let store = LogStore::from_log_groups(groups_to_add);
+        let store = LogStore::new(mock_drain);
 
-        // Fetch the actual stored groups by their original IDs to get their correct timestamps
-        let stored_g1 = store
-            .get_log_group_by_id(id1)
-            .expect("g1 not found in store");
-        let time1 = stored_g1.get_time();
-        let stored_g2 = store
-            .get_log_group_by_id(id2)
-            .expect("g2 not found in store");
-        let time2 = stored_g2.get_time();
-        let stored_g3 = store
-            .get_log_group_by_id(id3)
-            .expect("g3 not found in store");
-        let time3 = stored_g3.get_time();
-
-        // Ensure times are ordered as expected due to sleep, with some tolerance
         assert!(time1 < time2, "time1 should be less than time2");
         assert!(time2 < time3, "time2 should be less than time3");
 
-        // Scenario 1: Range includes all
         let all_groups = store.get_log_groups_in_range(time1, time3);
         assert_eq!(
             all_groups.len(),
@@ -442,15 +497,13 @@ mod tests {
             all_groups.iter().map(|g| g.id).collect::<Vec<_>>()
         );
 
-        // Scenario 2: Range includes some (middle one)
         let some_groups_middle = store.get_log_groups_in_range(
             time1 + ChronoDuration::milliseconds(50),
             time3 - ChronoDuration::milliseconds(50),
         );
         assert_eq!(some_groups_middle.len(), 1, "Should find 1 group (g2)");
-        assert_eq!(some_groups_middle[0].id, stored_g2.id);
+        assert_eq!(some_groups_middle[0].id, g2.id);
 
-        // Scenario 3: Range includes some (first two)
         let some_groups_first_two = store.get_log_groups_in_range(time1, time2);
         assert_eq!(
             some_groups_first_two.len(),
@@ -458,7 +511,6 @@ mod tests {
             "Should find 2 groups (g1, g2)"
         );
 
-        // Scenario 4: Range includes none (before all)
         let no_groups_before = store.get_log_groups_in_range(
             base_time - ChronoDuration::seconds(10),
             base_time - ChronoDuration::seconds(5),
@@ -469,7 +521,6 @@ mod tests {
             "Should find no groups (range before all)"
         );
 
-        // Scenario 5: Range includes none (after all)
         let no_groups_after = store.get_log_groups_in_range(
             time3 + ChronoDuration::seconds(5),
             time3 + ChronoDuration::seconds(10),
@@ -480,73 +531,68 @@ mod tests {
             "Should find no groups (range after all)"
         );
 
-        // Scenario 6: Range is start_time == end_time (exact match for g2)
         let exact_match_g2 = store.get_log_groups_in_range(time2, time2);
         assert_eq!(
             exact_match_g2.len(),
             1,
             "Should find g2 with exact time match"
         );
-        assert_eq!(exact_match_g2[0].id, stored_g2.id);
+        assert_eq!(exact_match_g2[0].id, g2.id);
 
-        // Scenario 7: Edge case - g1 exactly on start_time
         let edge_start = store.get_log_groups_in_range(time1, time1);
         assert_eq!(
             edge_start.len(),
             1,
             "Should find g1 when it's exactly on start_time"
         );
-        assert_eq!(edge_start[0].id, stored_g1.id);
+        assert_eq!(edge_start[0].id, g1.id);
 
-        // Scenario 8: Edge case - g3 exactly on end_time
         let edge_end = store.get_log_groups_in_range(time3, time3);
         assert_eq!(
             edge_end.len(),
             1,
             "Should find g3 when it's exactly on end_time"
         );
-        assert_eq!(edge_end[0].id, stored_g3.id);
+        assert_eq!(edge_end[0].id, g3.id);
     }
 
     #[test]
     fn test_query_log_range_aggregation() {
-        let mut store = LogStore::new();
+        let mut mock_drain = MockDrain::new();
         let record_template = Record::new("Log group for aggregation test".to_string());
         let mut log_group = LogGroup::new(record_template);
         let group_id = log_group.id;
         let base_time = Utc::now();
 
-        // Create example records with varying timestamps
-        let ex_r1 = Record::new("Example 1".to_string()); // ~base_time
+        let ex_r1 = Record::new("Example 1".to_string());
         let time1 = get_record_timestamp(&ex_r1).unwrap();
         log_group.add_example(ex_r1);
         sleep(StdDuration::from_millis(50));
 
-        let ex_r2 = Record::new("Example 2".to_string()); // ~base_time + 50ms
+        let ex_r2 = Record::new("Example 2".to_string());
         let time2 = get_record_timestamp(&ex_r2).unwrap();
         log_group.add_example(ex_r2);
         sleep(StdDuration::from_millis(50));
 
-        let ex_r3 = Record::new("Example 3".to_string()); // ~base_time + 100ms
+        let ex_r3 = Record::new("Example 3".to_string());
         let time3 = get_record_timestamp(&ex_r3).unwrap();
         log_group.add_example(ex_r3);
 
-        store.add_log_group(log_group);
+        mock_drain.add_group(log_group);
+        let store = LogStore::new(mock_drain);
 
-        // Scenario 1: Group ID not found
         let non_existent_id = Uuid::new_v4();
         let results_not_found = query_log_range_aggregation(
-            &store,
+            &store, // LogStore<MockDrain>
             QuerySource::ById(non_existent_id),
-            base_time,
-            Utc::now(),
+            base_time,  // DateTime<Utc>
+            Utc::now(), // DateTime<Utc>
         );
         assert!(
             results_not_found.is_empty(),
             "Should return empty for non-existent group ID"
         );
 
-        // Scenario 2: Group ID found, but no records in the time range
         let results_none_in_range = query_log_range_aggregation(
             &store,
             QuerySource::ById(group_id),
@@ -558,12 +604,11 @@ mod tests {
             "Should return empty if no records in time range"
         );
 
-        // Scenario 3: Group ID found, some records in the time range (middle one)
         let results_some_in_range = query_log_range_aggregation(
             &store,
             QuerySource::ById(group_id),
-            time1 + ChronoDuration::milliseconds(25),
-            time3 - ChronoDuration::milliseconds(25),
+            time1 + ChronoDuration::milliseconds(25), // start_time
+            time3 - ChronoDuration::milliseconds(25), // end_time
         );
         assert_eq!(
             results_some_in_range.len(),
@@ -571,11 +616,10 @@ mod tests {
             "Should find 1 record in the middle of the range"
         );
         assert_eq!(
-            get_record_timestamp(results_some_in_range[0]).unwrap(),
+            get_record_timestamp(&results_some_in_range[0]).unwrap(), // Added &
             time2
         );
 
-        // Scenario 4: Group ID found, all records in the time range
         let results_all_in_range =
             query_log_range_aggregation(&store, QuerySource::ById(group_id), time1, time3);
         assert_eq!(
@@ -584,8 +628,6 @@ mod tests {
             "Should find all 3 records in the range"
         );
 
-        // Scenario 5: Edge cases for time ranges
-        // Record 1 exactly on start_time
         let results_edge_start =
             query_log_range_aggregation(&store, QuerySource::ById(group_id), time1, time1);
         assert_eq!(
@@ -593,9 +635,8 @@ mod tests {
             1,
             "Should find record 1 when it is exactly on start_time"
         );
-        assert_eq!(get_record_timestamp(results_edge_start[0]).unwrap(), time1);
+        assert_eq!(get_record_timestamp(&results_edge_start[0]).unwrap(), time1); // Added &
 
-        // Record 3 exactly on end_time
         let results_edge_end =
             query_log_range_aggregation(&store, QuerySource::ById(group_id), time3, time3);
         assert_eq!(
@@ -603,26 +644,31 @@ mod tests {
             1,
             "Should find record 3 when it is exactly on end_time"
         );
-        assert_eq!(get_record_timestamp(results_edge_end[0]).unwrap(), time3);
+        assert_eq!(get_record_timestamp(&results_edge_end[0]).unwrap(), time3); // Added &
 
-        // Range that includes first two
         let results_first_two =
             query_log_range_aggregation(&store, QuerySource::ById(group_id), time1, time2);
         assert_eq!(results_first_two.len(), 2, "Should find first two records");
     }
 
     // --- Property Tests ---
+    // Helper function to create LogStore<MockDrain> from Vec<LogGroup>
+    fn log_store_from_mock_groups(groups: Vec<LogGroup>) -> LogStore<MockDrain> {
+        let mut drain = MockDrain::new();
+        for group in groups {
+            drain.add_group(group);
+        }
+        LogStore::new(drain)
+    }
+
     proptest! {
         #[test]
         fn prop_execute_logql_query(
-
-            (log_groups, query) in arb_log_groups_and_query()
+            (log_groups_vec, query) in arb_log_groups_and_query()
         ) {
-            let log_store = LogStore::from_log_groups(log_groups.clone()); // log_groups is already Vec<LogGroup>
+            // Use the helper to create LogStore with MockDrain
+            let log_store = log_store_from_mock_groups(log_groups_vec.clone());
             let results = execute_logql_query(&log_store, &query);
-
-            // The existing assertions rely on `log_groups` and `query` directly.
-            // This part of the test logic does not need to change.
 
             let selected_group_ids_set: HashSet<Uuid> = match &query.selector {
                 StreamSelector::LogGroupIds(ids) => ids.iter().cloned().collect(),
@@ -630,13 +676,10 @@ mod tests {
 
             for record_in_result in &results {
                 let mut record_belongs_to_a_selected_group = false;
-                // log_groups is Vec<LogGroup> from arb_log_groups_and_query
-                for group in &log_groups {
-                    if selected_group_ids_set.contains(&group.id) {
-                        if group.base_record().uid == record_in_result.uid || group.examples().iter().any(|ex| ex.uid == record_in_result.uid) {
-                            record_belongs_to_a_selected_group = true;
-                            break;
-                        }
+                for group in &log_groups_vec { // Use log_groups_vec here
+                    if selected_group_ids_set.contains(&group.id) && (group.base_record().uid == record_in_result.uid || group.examples().iter().any(|ex| ex.uid == record_in_result.uid)) {
+                        record_belongs_to_a_selected_group = true;
+                        break;
                     }
                 }
                 prop_assert!(record_belongs_to_a_selected_group, "Record {} from results (content: '{}') does not belong to any selected group. Selected groups: {:?}", record_in_result.uid, record_in_result.to_string(), selected_group_ids_set);
@@ -647,17 +690,16 @@ mod tests {
                 }
             }
 
-            for group in &log_groups {
+            for group in &log_groups_vec { // Use log_groups_vec here
                 if selected_group_ids_set.contains(&group.id) {
-                    let mut records_to_check = group.examples().clone(); // Clones Vec<Record>
-                    records_to_check.push(group.base_record().clone()); // Clones Record
+                    let mut records_to_check = group.examples().clone();
+                    records_to_check.push(group.base_record().clone());
                     for original_record in records_to_check {
-                        let matches_filter = query.filter.as_ref().map_or(true, |f| original_record.to_string().contains(&f.contains));
+                        let matches_filter = query.filter.as_ref().is_none_or(|f| original_record.to_string().contains(&f.contains));
                         if matches_filter {
                             prop_assert!(results.iter().any(|res_rec| res_rec.uid == original_record.uid),
                                          "Original record {} (content: '{}') from group {} matches filter but not found in results. Filter: {:?}", original_record.uid, original_record.to_string(), group.id, query.filter.as_ref().map(|f| &f.contains));
                         } else {
-                            // If it doesn't match the filter, it should not be in the results.
                             prop_assert!(!results.iter().any(|res_rec| res_rec.uid == original_record.uid),
                                          "Original record {} (content: '{}') from group {} does NOT match filter but IS found in results. Filter: {:?}", original_record.uid, original_record.to_string(), group.id, query.filter.as_ref().map(|f| &f.contains));
                         }
@@ -670,28 +712,22 @@ mod tests {
     proptest! {
         #[test]
         fn prop_query_log_range_aggregation_with_logql(
-
-            (log_groups, query, time1, time2) in arb_log_groups_query_and_times()
+            (log_groups_vec, query, time1, time2) in arb_log_groups_query_and_times()
         ) {
-            let log_store = LogStore::from_log_groups(log_groups.clone()); // log_groups is Vec<LogGroup>
+            let log_store = log_store_from_mock_groups(log_groups_vec.clone()); // Use helper
             let (start_time, end_time) = if time1 <= time2 { (time1, time2) } else { (time2, time1) };
             let results = query_log_range_aggregation(&log_store, QuerySource::ByLogQl(query.clone()), start_time, end_time);
 
-            // The existing assertions rely on `log_groups`, `query`, `start_time`, `end_time` directly.
-            // This part of the test logic does not need to change.
             let selected_group_ids_set: HashSet<Uuid> = match &query.selector {
                 StreamSelector::LogGroupIds(ids) => ids.iter().cloned().collect(),
             };
 
             for record_in_result in &results {
                 let mut record_belongs_to_a_selected_group = false;
-
-                for group in &log_groups { // log_groups is Vec<LogGroup>
-                    if selected_group_ids_set.contains(&group.id) {
-                        if group.base_record().uid == record_in_result.uid || group.examples().iter().any(|ex| ex.uid == record_in_result.uid) {
-                            record_belongs_to_a_selected_group = true;
-                            break;
-                        }
+                for group in &log_groups_vec { // Use log_groups_vec here
+                    if selected_group_ids_set.contains(&group.id) && (group.base_record().uid == record_in_result.uid || group.examples().iter().any(|ex| ex.uid == record_in_result.uid)) {
+                        record_belongs_to_a_selected_group = true;
+                        break;
                     }
                 }
                 prop_assert!(record_belongs_to_a_selected_group, "Record {} from results (content: '{}') does not belong to selected group. Selected: {:?}", record_in_result.uid, record_in_result.to_string(), selected_group_ids_set);
@@ -706,13 +742,13 @@ mod tests {
                              "Record time {:?} for {} (content: '{}') is outside range [{:?}, {:?}]", record_time, record_in_result.uid, record_in_result.to_string(), start_time, end_time);
             }
 
-            for group in &log_groups { // log_groups is Vec<LogGroup>
+            for group in &log_groups_vec { // Use log_groups_vec here
                 if selected_group_ids_set.contains(&group.id) {
                     let mut records_to_check = group.examples().clone();
                     records_to_check.push(group.base_record().clone());
 
                     for original_record in records_to_check {
-                        let matches_filter = query.filter.as_ref().map_or(true, |f| original_record.to_string().contains(&f.contains));
+                        let matches_filter = query.filter.as_ref().is_none_or(|f| original_record.to_string().contains(&f.contains));
                         let record_time_option = get_record_timestamp(&original_record);
                         prop_assert!(record_time_option.is_some(), "Original record {} (content: '{}') must have a timestamp for time range check.", original_record.uid, original_record.to_string());
                         let record_time = record_time_option.unwrap();

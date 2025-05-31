@@ -9,28 +9,29 @@
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
 use anyhow::Result;
-use drain_flow::drains::two_stage_drain::TwoStageDrain; // Adjust path if necessary
+use drain_flow::drains::{api::Drain, two_stage_drain::TwoStageDrain}; // Adjust path if necessary, Added api::Drain
 
 #[allow(dead_code)] // Suppress warning, as this is used by a test
 fn básico_drain_test_harness(lines: Vec<String>, expected_groups: usize) -> Result<()> {
     let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 10)?; // Using default values for now
 
     for line in lines {
-        drain.process_line(line)?;
+        Drain::process_line(&mut drain, line)?; // Updated call
     }
 
-    // We need a way to count the number of distinct log groups.
-    // The `iter_groups()` method in `SingleLayer` returns `Vec<Vec<&LogGroup>>`.
-    // We'll need a similar method in `TwoStageDrain` to count the groups for verification.
-    // For now, this test will expect `expected_groups` but won't be able to verify it
-    // until `iter_groups` or a similar method is implemented for `TwoStageDrain`.
-    // Add a TODO comment here.
-    // TODO: Implement a way to count log groups in TwoStageDrain and assert against expected_groups.
-    // For now, the test just ensures processing doesn't panic.
+    let groups = drain.collect_log_groups();
+    assert_eq!(
+        groups.len(),
+        expected_groups,
+        "Mismatch in expected number of log groups. Processed {} lines.",
+        drain.line_count_processed
+    );
+
     println!(
-        "Processed {} lines. Expected {} groups. (Verification pending iter_groups)",
-        drain.line_count_processed, expected_groups
-    ); // Placeholder for line_count
+        "Processed {} lines. Verified {} groups.",
+        drain.line_count_processed,
+        groups.len()
+    );
 
     Ok(())
 }
@@ -79,16 +80,26 @@ fn test_basic_drain_integration_with_preprocessing() -> Result<()> {
         "2023-10-27T10:04:00Z user-456 System shutdown initiated".to_string(),   // Match 2
         "2023-10-27T10:05:00Z user-123 System started successfully".to_string(), // Match 1
     ];
+    let line_count = lines.len(); // Store line count before moving lines
 
     for line in lines {
-        drain.process_line(line)?;
+        Drain::process_line(&mut drain, line)?; // Updated call
     }
 
     // Expected groups:
     // 1. "<*> <*> System started successfully"
     // 2. "<*> <*> System shutdown initiated"
-    // TODO: Implement group counting and verification for TwoStageDrain.
-    // For now, this test checks if processing completes without errors.
-    println!("Processed lines with preprocessing. (Verification of group count pending)");
+    let groups = drain.collect_log_groups();
+    assert_eq!(
+        groups.len(),
+        2, // Expected number of groups after preprocessing
+        "Mismatch in expected number of log groups after preprocessing. Processed {} lines.",
+        line_count // Use stored line_count
+    );
+    println!(
+        "Processed {} lines with preprocessing. Verified {} groups.",
+        line_count, // Use stored line_count
+        groups.len()
+    );
     Ok(())
 }

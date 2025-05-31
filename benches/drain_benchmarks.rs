@@ -11,8 +11,8 @@
 use chrono::{Duration as ChronoDuration, Utc};
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use drain_flow::{
-    drains::{simple::SingleLayer, two_stage_drain::TwoStageDrain},
-    log_group::LogGroup,
+    drains::{api::Drain, simple::SingleLayer, two_stage_drain::TwoStageDrain}, // Added api::Drain
+    // log_group::LogGroup, // Removed as per compiler warning (unused)
     query::{query_log_range_aggregation, LogStore},
     // record::Record, // Removed as it's unused directly in this file
 };
@@ -70,7 +70,8 @@ fn benchmark_single_layer_process_line(c: &mut Criterion) {
             let mut drain = SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
             b.iter(|| {
                 for line in &lines {
-                    drain.process_line(black_box(line.clone())).unwrap();
+                    Drain::process_line(&mut drain, black_box(line.clone())).unwrap();
+                    // Updated call
                 }
             });
         });
@@ -78,8 +79,9 @@ fn benchmark_single_layer_process_line(c: &mut Criterion) {
     group.finish();
 }
 
-fn benchmark_log_store_from_single_layer(c: &mut Criterion) {
-    let mut group = c.benchmark_group("SingleLayer_LogStorePopulation");
+fn benchmark_single_layer_collect_groups_and_create_store(c: &mut Criterion) {
+    // Renamed
+    let mut group = c.benchmark_group("SingleLayer_CollectAndStore"); // Updated group name
     let line_counts = [100, 1000, 5000];
     let seed = 42;
 
@@ -87,19 +89,37 @@ fn benchmark_log_store_from_single_layer(c: &mut Criterion) {
         group.throughput(Throughput::Elements(*count as u64));
         group.bench_with_input(BenchmarkId::from_parameter(count), count, |b, &size| {
             let lines = generate_log_lines(size, seed);
+            // Drain population is part of the setup for this specific benchmark iteration
+            // but not part of the b.iter() loop, to focus on collection + store creation.
+            // If drain population needs to be benchmarked *with* collection, it should be inside b.iter().
+            // For now, assuming we benchmark collection and store creation on a pre-populated drain.
+            let mut drain = SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
+            for line in &lines {
+                Drain::process_line(&mut drain, line.clone()).unwrap();
+            }
+
             b.iter(|| {
-                let mut drain =
+                // In each iteration, collect groups and create the store.
+                // This means drain is cloned or re-populated if we want to measure population too.
+                // The current setup reuses the populated drain from outside b.iter,
+                // which means we are only measuring collect_log_groups and LogStore::new.
+                // To be consistent with "populating the drain as it does currently" *inside* the benchmarked loop:
+                // We need to decide if drain creation & population is part of what's measured for "LogStorePopulation"
+                // The original name `benchmark_log_store_from_single_layer` implied the whole process.
+                // Let's assume the intent is to benchmark the collection and store creation part primarily.
+                // So, the drain is populated once, then we benchmark collection + store creation.
+                // If drain state changes or is consumed by LogStore::new, then drain must be setup inside b.iter.
+                // Since LogStore::new(drain) takes ownership, drain needs to be setup inside.
+
+                let mut drain_for_iter =
                     SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
                 for line in &lines {
-                    drain.process_line(line.clone()).unwrap();
+                    // Populate drain inside iter
+                    Drain::process_line(&mut drain_for_iter, line.clone()).unwrap();
                 }
-                let log_groups_nested: Vec<Vec<&LogGroup>> = drain.iter_groups(); // Removed .collect()
-                let log_groups: Vec<LogGroup> = log_groups_nested
-                    .into_iter()
-                    .flatten()
-                    .map(|lg_ref| lg_ref.clone()) // Clone to get owned LogGroup
-                    .collect();
-                let _store = LogStore::from_log_groups(black_box(log_groups));
+
+                let _log_groups = drain_for_iter.collect_log_groups(); // Collect groups
+                let _store = LogStore::new(black_box(drain_for_iter)); // Create store
             });
         });
     }
@@ -114,20 +134,19 @@ fn benchmark_query_on_single_layer_data(c: &mut Criterion) {
 
     let mut drain = SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
     for line in &lines {
-        drain.process_line(line.clone()).unwrap();
+        Drain::process_line(&mut drain, line.clone()).unwrap();
     }
-    let log_groups_nested: Vec<Vec<&LogGroup>> = drain.iter_groups(); // Removed .collect()
-    let log_groups: Vec<LogGroup> = log_groups_nested
-        .into_iter()
-        .flatten()
-        .map(|lg_ref| lg_ref.clone())
-        .collect();
-    let store = LogStore::from_log_groups(log_groups);
+    // LogStore is now created with the drain instance.
+    // The drain is consumed by LogStore::new, so if drain is needed later, it must be cloned.
+    // For this benchmark, we populate the drain, then pass it to LogStore.
+    let store = LogStore::new(drain); // drain is moved here.
 
     // Find a group with examples for querying
-    let target_group_id_opt = store
-        .get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now())
-        .iter()
+    // get_log_groups_in_range now returns Vec<LogGroup> (owned)
+    let available_groups =
+        store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now());
+    let target_group_id_opt = available_groups
+        .iter() // Iterate over &LogGroup
         .find(|lg| !lg.get_examples().is_empty())
         .map(|lg| lg.id);
 
@@ -186,7 +205,8 @@ fn benchmark_two_stage_drain_process_line(c: &mut Criterion) {
                 TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
             b.iter(|| {
                 for line in &lines {
-                    drain.process_line(black_box(line.clone())).unwrap();
+                    Drain::process_line(&mut drain, black_box(line.clone())).unwrap();
+                    // Updated call
                 }
             });
         });
@@ -194,8 +214,9 @@ fn benchmark_two_stage_drain_process_line(c: &mut Criterion) {
     group.finish();
 }
 
-fn benchmark_log_store_from_two_stage_drain(c: &mut Criterion) {
-    let mut group = c.benchmark_group("TwoStageDrain_LogStorePopulation");
+fn benchmark_two_stage_drain_collect_groups_and_create_store(c: &mut Criterion) {
+    // Renamed
+    let mut group = c.benchmark_group("TwoStageDrain_CollectAndStore"); // Updated group name
     let line_counts = [100, 1000, 5000];
     let seed = 42;
 
@@ -203,14 +224,16 @@ fn benchmark_log_store_from_two_stage_drain(c: &mut Criterion) {
         group.throughput(Throughput::Elements(*count as u64));
         group.bench_with_input(BenchmarkId::from_parameter(count), count, |b, &size| {
             let lines = generate_log_lines(size, seed);
+            // Similar to SingleLayer, setting up drain inside b.iter for consistency
             b.iter(|| {
-                let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 100)
+                let mut drain_for_iter = TwoStageDrain::new(vec![], 0.5, 4, 100)
                     .expect("Failed to create TwoStageDrain");
                 for line in &lines {
-                    drain.process_line(line.clone()).unwrap();
+                    // Populate drain inside iter
+                    Drain::process_line(&mut drain_for_iter, line.clone()).unwrap();
                 }
-                let log_groups: Vec<LogGroup> = drain.collect_all_log_groups(); // Using the new method
-                let _store = LogStore::from_log_groups(black_box(log_groups));
+                let _log_groups = drain_for_iter.collect_log_groups(); // Collect groups
+                let _store = LogStore::new(black_box(drain_for_iter)); // Create store
             });
         });
     }
@@ -226,13 +249,13 @@ fn benchmark_query_on_two_stage_drain_data(c: &mut Criterion) {
     let mut drain =
         TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
     for line in &lines {
-        drain.process_line(line.clone()).unwrap();
+        Drain::process_line(&mut drain, line.clone()).unwrap();
     }
-    let log_groups = drain.collect_all_log_groups();
-    let store = LogStore::from_log_groups(log_groups);
+    let store = LogStore::new(drain); // drain is moved here
 
-    let target_group_id_opt = store
-        .get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now())
+    let available_groups =
+        store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now());
+    let target_group_id_opt = available_groups
         .iter()
         .find(|lg| !lg.get_examples().is_empty())
         .map(|lg| lg.id);
@@ -279,10 +302,10 @@ fn benchmark_query_on_two_stage_drain_data(c: &mut Criterion) {
 criterion_group!(
     benches,
     benchmark_single_layer_process_line,
-    benchmark_log_store_from_single_layer,
+    benchmark_single_layer_collect_groups_and_create_store, // Renamed
     benchmark_query_on_single_layer_data,
     benchmark_two_stage_drain_process_line,
-    benchmark_log_store_from_two_stage_drain,
+    benchmark_two_stage_drain_collect_groups_and_create_store, // Renamed
     benchmark_query_on_two_stage_drain_data
 );
 criterion_main!(benches);
