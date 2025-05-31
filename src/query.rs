@@ -44,7 +44,7 @@ impl<D: Drain> LogStore<D> {
     /// # Parameters
     ///
     /// * `drain`: An instance of a type implementing the `Drain` trait, which will
-    ///            serve as the source of log data for this store.
+    ///   serve as the source of log data for this store.
     pub fn new(drain: D) -> Self {
         Self { drain }
     }
@@ -196,7 +196,8 @@ pub fn query_log_range_aggregation<D: Drain>(
         QuerySource::ById(group_id) => {
             log_store.get_log_group_by_id(group_id).map_or_else(
                 Vec::new, // If group not found, return empty vec
-                |log_group| { // If group found, collect its records (cloned)
+                |log_group| {
+                    // If group found, collect its records (cloned)
                     let mut records = vec![log_group.base_record().clone()];
                     records.extend(log_group.examples().iter().cloned());
                     records
@@ -210,7 +211,8 @@ pub fn query_log_range_aggregation<D: Drain>(
 
     initial_records
         .into_iter()
-        .filter(|record| { // record is now Record, not &Record
+        .filter(|record| {
+            // record is now Record, not &Record
             record.uid.get_timestamp().is_some_and(|ts| {
                 let (secs_u64, nanos) = ts.to_unix();
                 let secs_i64 = secs_u64 as i64;
@@ -236,7 +238,7 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration as StdDuration;
     use uuid::{Uuid, Version}; // Added for proptest
-    // Removed unused import: use crate::drains::simple::SingleLayer;
+                               // Removed unused import: use crate::drains::simple::SingleLayer;
 
     // Helper to create a record and get its timestamp
     fn get_record_timestamp(record: &Record) -> Option<DateTime<Utc>> {
@@ -257,7 +259,7 @@ mod tests {
 
     // Strategy for Record
     fn arb_record() -> impl Strategy<Value = Record> {
-        arb_record_content().prop_map(|content| Record::new(content))
+        arb_record_content().prop_map(Record::new)
     }
 
     // Strategy for LineFilter
@@ -400,7 +402,9 @@ mod tests {
 
     impl MockDrain {
         fn new() -> Self {
-            Self { groups: HashMap::new() }
+            Self {
+                groups: HashMap::new(),
+            }
         }
 
         #[allow(dead_code)] // This method is used in tests that might be temporarily commented out
@@ -420,7 +424,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn test_log_store_new() {
         let mock_drain = MockDrain::new();
@@ -429,9 +432,13 @@ mod tests {
         // Further checks depend on how LogStore interacts with Drain,
         // e.g., if it immediately collects groups or does so on demand.
         // For now, just ensuring it can be created.
-        assert!(store.get_log_groups_in_range(Utc::now(), Utc::now()).is_empty(), "New LogStore with empty drain should have no groups in range");
+        assert!(
+            store
+                .get_log_groups_in_range(Utc::now(), Utc::now())
+                .is_empty(),
+            "New LogStore with empty drain should have no groups in range"
+        );
     }
-
 
     #[test]
     fn test_log_store_get_by_id() {
@@ -442,7 +449,6 @@ mod tests {
         let mut mock_drain = MockDrain::new();
         mock_drain.add_group(group1.clone()); // Clone group1 as it's used later
         let store = LogStore::new(mock_drain);
-
 
         let found_group = store.get_log_group_by_id(id1);
         assert!(found_group.is_some(), "Should find existing group by ID");
@@ -484,7 +490,12 @@ mod tests {
         assert!(time2 < time3, "time2 should be less than time3");
 
         let all_groups = store.get_log_groups_in_range(time1, time3);
-        assert_eq!(all_groups.len(), 3, "Should find all 3 groups. Found: {:?}", all_groups.iter().map(|g| g.id).collect::<Vec<_>>());
+        assert_eq!(
+            all_groups.len(),
+            3,
+            "Should find all 3 groups. Found: {:?}",
+            all_groups.iter().map(|g| g.id).collect::<Vec<_>>()
+        );
 
         let some_groups_middle = store.get_log_groups_in_range(
             time1 + ChronoDuration::milliseconds(50),
@@ -493,37 +504,55 @@ mod tests {
         assert_eq!(some_groups_middle.len(), 1, "Should find 1 group (g2)");
         assert_eq!(some_groups_middle[0].id, g2.id);
 
-
         let some_groups_first_two = store.get_log_groups_in_range(time1, time2);
-        assert_eq!(some_groups_first_two.len(), 2, "Should find 2 groups (g1, g2)");
-
+        assert_eq!(
+            some_groups_first_two.len(),
+            2,
+            "Should find 2 groups (g1, g2)"
+        );
 
         let no_groups_before = store.get_log_groups_in_range(
             base_time - ChronoDuration::seconds(10),
             base_time - ChronoDuration::seconds(5),
         );
-        assert_eq!(no_groups_before.len(), 0, "Should find no groups (range before all)");
-
+        assert_eq!(
+            no_groups_before.len(),
+            0,
+            "Should find no groups (range before all)"
+        );
 
         let no_groups_after = store.get_log_groups_in_range(
             time3 + ChronoDuration::seconds(5),
             time3 + ChronoDuration::seconds(10),
         );
-        assert_eq!(no_groups_after.len(), 0, "Should find no groups (range after all)");
-
+        assert_eq!(
+            no_groups_after.len(),
+            0,
+            "Should find no groups (range after all)"
+        );
 
         let exact_match_g2 = store.get_log_groups_in_range(time2, time2);
-        assert_eq!(exact_match_g2.len(), 1, "Should find g2 with exact time match");
+        assert_eq!(
+            exact_match_g2.len(),
+            1,
+            "Should find g2 with exact time match"
+        );
         assert_eq!(exact_match_g2[0].id, g2.id);
 
-
         let edge_start = store.get_log_groups_in_range(time1, time1);
-        assert_eq!(edge_start.len(), 1, "Should find g1 when it's exactly on start_time");
+        assert_eq!(
+            edge_start.len(),
+            1,
+            "Should find g1 when it's exactly on start_time"
+        );
         assert_eq!(edge_start[0].id, g1.id);
 
-
         let edge_end = store.get_log_groups_in_range(time3, time3);
-        assert_eq!(edge_end.len(), 1, "Should find g3 when it's exactly on end_time");
+        assert_eq!(
+            edge_end.len(),
+            1,
+            "Should find g3 when it's exactly on end_time"
+        );
         assert_eq!(edge_end[0].id, g3.id);
     }
 
@@ -552,19 +581,17 @@ mod tests {
         mock_drain.add_group(log_group);
         let store = LogStore::new(mock_drain);
 
-
         let non_existent_id = Uuid::new_v4();
         let results_not_found = query_log_range_aggregation(
             &store, // LogStore<MockDrain>
             QuerySource::ById(non_existent_id),
-            base_time, // DateTime<Utc>
-            Utc::now(),  // DateTime<Utc>
+            base_time,  // DateTime<Utc>
+            Utc::now(), // DateTime<Utc>
         );
         assert!(
             results_not_found.is_empty(),
             "Should return empty for non-existent group ID"
         );
-
 
         let results_none_in_range = query_log_range_aggregation(
             &store,
@@ -576,7 +603,6 @@ mod tests {
             results_none_in_range.is_empty(),
             "Should return empty if no records in time range"
         );
-
 
         let results_some_in_range = query_log_range_aggregation(
             &store,
@@ -594,7 +620,6 @@ mod tests {
             time2
         );
 
-
         let results_all_in_range =
             query_log_range_aggregation(&store, QuerySource::ById(group_id), time1, time3);
         assert_eq!(
@@ -602,7 +627,6 @@ mod tests {
             3,
             "Should find all 3 records in the range"
         );
-
 
         let results_edge_start =
             query_log_range_aggregation(&store, QuerySource::ById(group_id), time1, time1);
@@ -612,7 +636,6 @@ mod tests {
             "Should find record 1 when it is exactly on start_time"
         );
         assert_eq!(get_record_timestamp(&results_edge_start[0]).unwrap(), time1); // Added &
-
 
         let results_edge_end =
             query_log_range_aggregation(&store, QuerySource::ById(group_id), time3, time3);
@@ -654,11 +677,9 @@ mod tests {
             for record_in_result in &results {
                 let mut record_belongs_to_a_selected_group = false;
                 for group in &log_groups_vec { // Use log_groups_vec here
-                    if selected_group_ids_set.contains(&group.id) {
-                        if group.base_record().uid == record_in_result.uid || group.examples().iter().any(|ex| ex.uid == record_in_result.uid) {
-                            record_belongs_to_a_selected_group = true;
-                            break;
-                        }
+                    if selected_group_ids_set.contains(&group.id) && (group.base_record().uid == record_in_result.uid || group.examples().iter().any(|ex| ex.uid == record_in_result.uid)) {
+                        record_belongs_to_a_selected_group = true;
+                        break;
                     }
                 }
                 prop_assert!(record_belongs_to_a_selected_group, "Record {} from results (content: '{}') does not belong to any selected group. Selected groups: {:?}", record_in_result.uid, record_in_result.to_string(), selected_group_ids_set);
@@ -674,7 +695,7 @@ mod tests {
                     let mut records_to_check = group.examples().clone();
                     records_to_check.push(group.base_record().clone());
                     for original_record in records_to_check {
-                        let matches_filter = query.filter.as_ref().map_or(true, |f| original_record.to_string().contains(&f.contains));
+                        let matches_filter = query.filter.as_ref().is_none_or(|f| original_record.to_string().contains(&f.contains));
                         if matches_filter {
                             prop_assert!(results.iter().any(|res_rec| res_rec.uid == original_record.uid),
                                          "Original record {} (content: '{}') from group {} matches filter but not found in results. Filter: {:?}", original_record.uid, original_record.to_string(), group.id, query.filter.as_ref().map(|f| &f.contains));
@@ -704,11 +725,9 @@ mod tests {
             for record_in_result in &results {
                 let mut record_belongs_to_a_selected_group = false;
                 for group in &log_groups_vec { // Use log_groups_vec here
-                    if selected_group_ids_set.contains(&group.id) {
-                        if group.base_record().uid == record_in_result.uid || group.examples().iter().any(|ex| ex.uid == record_in_result.uid) {
-                            record_belongs_to_a_selected_group = true;
-                            break;
-                        }
+                    if selected_group_ids_set.contains(&group.id) && (group.base_record().uid == record_in_result.uid || group.examples().iter().any(|ex| ex.uid == record_in_result.uid)) {
+                        record_belongs_to_a_selected_group = true;
+                        break;
                     }
                 }
                 prop_assert!(record_belongs_to_a_selected_group, "Record {} from results (content: '{}') does not belong to selected group. Selected: {:?}", record_in_result.uid, record_in_result.to_string(), selected_group_ids_set);
@@ -729,7 +748,7 @@ mod tests {
                     records_to_check.push(group.base_record().clone());
 
                     for original_record in records_to_check {
-                        let matches_filter = query.filter.as_ref().map_or(true, |f| original_record.to_string().contains(&f.contains));
+                        let matches_filter = query.filter.as_ref().is_none_or(|f| original_record.to_string().contains(&f.contains));
                         let record_time_option = get_record_timestamp(&original_record);
                         prop_assert!(record_time_option.is_some(), "Original record {} (content: '{}') must have a timestamp for time range check.", original_record.uid, original_record.to_string());
                         let record_time = record_time_option.unwrap();

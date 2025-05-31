@@ -46,7 +46,8 @@ pub fn benchmark_sink(c: &mut Criterion) {
             |b, lines| {
                 b.iter(|| {
                     for l in lines {
-                        Drain::process_line(&mut drain, l.to_string()).unwrap(); // Updated call
+                        Drain::process_line(&mut drain, l.to_string()).unwrap();
+                        // Updated call
                     }
                 });
             },

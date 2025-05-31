@@ -8,8 +8,8 @@
 // Server Side Public License along with this program.
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
-use anyhow::Error;
 use crate::log_group::LogGroup;
+use anyhow::Error;
 
 /// Defines the core interface for log processing drains.
 ///

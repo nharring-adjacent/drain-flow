@@ -36,8 +36,7 @@ fn setup_log_store(
                 .collect::<Vec<_>>()
                 .join(" ")
         );
-        Drain::process_line(&mut drain, base_line.clone())
-            .expect("Failed to process base line");
+        Drain::process_line(&mut drain, base_line.clone()).expect("Failed to process base line");
 
         // Generate example lines for this group
         for j in 0..records_per_group {
@@ -47,23 +46,27 @@ fn setup_log_store(
             for _ in 0..tokens_to_change {
                 if !base_tokens.is_empty() {
                     let idx_to_change = rng.random_range(0..base_tokens.len()); // Replaced gen_range
-                    base_tokens[idx_to_change] = if j % 2 == 0 && idx_to_change == base_tokens.len() -1 { // Corrected index check
-                        "common_term_for_filtering"
-                    } else {
-                        // This needs a static string or a pool, can't use format! directly here easily
-                        // For simplicity, let's just append.
-                        "changed_token" // This was "changed_token"
-                    };
+                    base_tokens[idx_to_change] =
+                        if j % 2 == 0 && idx_to_change == base_tokens.len() - 1 {
+                            // Corrected index check
+                            "common_term_for_filtering"
+                        } else {
+                            // This needs a static string or a pool, can't use format! directly here easily
+                            // For simplicity, let's just append.
+                            "changed_token" // This was "changed_token"
+                        };
                 }
             }
             let mut modified_example_line = base_tokens.join(" ");
-            if j % 2 == 0 { // ensure common_term_for_filtering is present in some
-                if !modified_example_line.contains("common_term_for_filtering") { // Avoid duplicating if already changed
+            if j % 2 == 0 {
+                // ensure common_term_for_filtering is present in some
+                if !modified_example_line.contains("common_term_for_filtering") {
+                    // Avoid duplicating if already changed
                     modified_example_line.push_str(" common_term_for_filtering");
                 }
             }
-            modified_example_line.push_str(&format!(" example_id_{}", Uuid::from_u128(rng.random())));
-
+            modified_example_line
+                .push_str(&format!(" example_id_{}", Uuid::from_u128(rng.random())));
 
             Drain::process_line(&mut drain, modified_example_line)
                 .expect("Failed to process example line");
@@ -141,10 +144,9 @@ fn benchmark_qra_by_id(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(42);
     let (log_store, group_ids) = setup_log_store(10, 100, &mut rng);
 
-    let target_group_id = group_ids
+    let target_group_id = *group_ids
         .first()
-        .expect("Should have at least one group_id")
-        .clone();
+        .expect("Should have at least one group_id");
     let query_source = QuerySource::ById(target_group_id);
 
     let now = Utc::now();

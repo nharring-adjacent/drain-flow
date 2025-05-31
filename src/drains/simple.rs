@@ -146,11 +146,7 @@ impl Drain for SingleLayer {
     }
 
     fn collect_log_groups(&self) -> Vec<LogGroup> {
-        self.iter_groups()
-            .into_iter()
-            .flatten()
-            .cloned()
-            .collect()
+        self.iter_groups().into_iter().flatten().cloned().collect()
     }
 }
 

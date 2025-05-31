@@ -70,7 +70,8 @@ fn benchmark_single_layer_process_line(c: &mut Criterion) {
             let mut drain = SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
             b.iter(|| {
                 for line in &lines {
-                    Drain::process_line(&mut drain, black_box(line.clone())).unwrap(); // Updated call
+                    Drain::process_line(&mut drain, black_box(line.clone())).unwrap();
+                    // Updated call
                 }
             });
         });
@@ -78,7 +79,8 @@ fn benchmark_single_layer_process_line(c: &mut Criterion) {
     group.finish();
 }
 
-fn benchmark_single_layer_collect_groups_and_create_store(c: &mut Criterion) { // Renamed
+fn benchmark_single_layer_collect_groups_and_create_store(c: &mut Criterion) {
+    // Renamed
     let mut group = c.benchmark_group("SingleLayer_CollectAndStore"); // Updated group name
     let line_counts = [100, 1000, 5000];
     let seed = 42;
@@ -91,8 +93,7 @@ fn benchmark_single_layer_collect_groups_and_create_store(c: &mut Criterion) { /
             // but not part of the b.iter() loop, to focus on collection + store creation.
             // If drain population needs to be benchmarked *with* collection, it should be inside b.iter().
             // For now, assuming we benchmark collection and store creation on a pre-populated drain.
-            let mut drain =
-                SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
+            let mut drain = SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
             for line in &lines {
                 Drain::process_line(&mut drain, line.clone()).unwrap();
             }
@@ -112,7 +113,8 @@ fn benchmark_single_layer_collect_groups_and_create_store(c: &mut Criterion) { /
 
                 let mut drain_for_iter =
                     SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain");
-                for line in &lines { // Populate drain inside iter
+                for line in &lines {
+                    // Populate drain inside iter
                     Drain::process_line(&mut drain_for_iter, line.clone()).unwrap();
                 }
 
@@ -141,7 +143,8 @@ fn benchmark_query_on_single_layer_data(c: &mut Criterion) {
 
     // Find a group with examples for querying
     // get_log_groups_in_range now returns Vec<LogGroup> (owned)
-    let available_groups = store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now());
+    let available_groups =
+        store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now());
     let target_group_id_opt = available_groups
         .iter() // Iterate over &LogGroup
         .find(|lg| !lg.get_examples().is_empty())
@@ -202,7 +205,8 @@ fn benchmark_two_stage_drain_process_line(c: &mut Criterion) {
                 TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
             b.iter(|| {
                 for line in &lines {
-                    Drain::process_line(&mut drain, black_box(line.clone())).unwrap(); // Updated call
+                    Drain::process_line(&mut drain, black_box(line.clone())).unwrap();
+                    // Updated call
                 }
             });
         });
@@ -210,7 +214,8 @@ fn benchmark_two_stage_drain_process_line(c: &mut Criterion) {
     group.finish();
 }
 
-fn benchmark_two_stage_drain_collect_groups_and_create_store(c: &mut Criterion) { // Renamed
+fn benchmark_two_stage_drain_collect_groups_and_create_store(c: &mut Criterion) {
+    // Renamed
     let mut group = c.benchmark_group("TwoStageDrain_CollectAndStore"); // Updated group name
     let line_counts = [100, 1000, 5000];
     let seed = 42;
@@ -223,11 +228,12 @@ fn benchmark_two_stage_drain_collect_groups_and_create_store(c: &mut Criterion) 
             b.iter(|| {
                 let mut drain_for_iter = TwoStageDrain::new(vec![], 0.5, 4, 100)
                     .expect("Failed to create TwoStageDrain");
-                for line in &lines { // Populate drain inside iter
+                for line in &lines {
+                    // Populate drain inside iter
                     Drain::process_line(&mut drain_for_iter, line.clone()).unwrap();
                 }
                 let _log_groups = drain_for_iter.collect_log_groups(); // Collect groups
-                let _store = LogStore::new(black_box(drain_for_iter));  // Create store
+                let _store = LogStore::new(black_box(drain_for_iter)); // Create store
             });
         });
     }
@@ -247,7 +253,8 @@ fn benchmark_query_on_two_stage_drain_data(c: &mut Criterion) {
     }
     let store = LogStore::new(drain); // drain is moved here
 
-    let available_groups = store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now());
+    let available_groups =
+        store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now());
     let target_group_id_opt = available_groups
         .iter()
         .find(|lg| !lg.get_examples().is_empty())

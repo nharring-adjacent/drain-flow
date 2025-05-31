@@ -97,8 +97,11 @@ mod tests {
     #[test]
     fn test_process_line_creates_new_group() {
         let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 10).unwrap();
-        assert_that(&Drain::process_line(&mut drain, "This is a test log line".to_string()))
-            .is_ok_containing(true);
+        assert_that(&Drain::process_line(
+            &mut drain,
+            "This is a test log line".to_string(),
+        ))
+        .is_ok_containing(true);
     }
 
     #[traced_test]
@@ -106,8 +109,11 @@ mod tests {
     fn test_process_line_matches_existing_group() {
         let mut drain = TwoStageDrain::new(vec![], 0.5, 10, 10).unwrap(); // Increased max_depth for this test
         let _ = Drain::process_line(&mut drain, "Log message type A value1".to_string());
-        assert_that(&Drain::process_line(&mut drain, "Log message type A value2".to_string()))
-            .is_ok_containing(false);
+        assert_that(&Drain::process_line(
+            &mut drain,
+            "Log message type A value2".to_string(),
+        ))
+        .is_ok_containing(false);
     }
 
     #[traced_test]
@@ -115,8 +121,11 @@ mod tests {
     fn test_process_line_creates_second_group() {
         let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 10).unwrap();
         let _ = Drain::process_line(&mut drain, "Log message type A value1".to_string());
-        assert_that(&Drain::process_line(&mut drain, "Completely different log message valueX".to_string()))
-            .is_ok_containing(true);
+        assert_that(&Drain::process_line(
+            &mut drain,
+            "Completely different log message valueX".to_string(),
+        ))
+        .is_ok_containing(true);
     }
 
     #[traced_test]
