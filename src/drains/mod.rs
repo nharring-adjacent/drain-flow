@@ -23,4 +23,5 @@ pub mod api;
 pub mod simple;
 pub mod two_stage_drain;
 pub mod differential_drain;
+pub use differential_drain::DifferentialDrain;
 
