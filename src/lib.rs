@@ -19,15 +19,18 @@ pub mod record;
 
 /// # Log Querying
 ///
-/// This module provides structures and functions for querying processed log data that has
-/// been structured into `LogGroup`s. The primary structure for accessing and managing
-/// this data is the `LogStore`.
+/// This module provides structures and functions for querying processed log data.
+/// Log data is structured into `LogGroup`s, which are collections of similar log records.
+/// The primary structure for querying this data is the [`query::LogStore`].
+///
+/// The `LogStore` is generic and operates on data provided by a [`drains::api::Drain`]
+/// implementation. This means it doesn't own the log data directly but rather queries
+/// it from the underlying drain.
 ///
 /// Key functionalities include:
-/// - Storing and retrieving `LogGroup`s by their unique ID.
-/// - Filtering `LogGroup`s based on a specific time range.
-/// - Performing range-based aggregation on the example records of a specific `LogGroup`
-///   (identified by its ID) via the `query::query_log_range_aggregation` function.
-///   This allows for detailed analysis of log events matching a particular pattern
-///   within a given time window.
+/// - Retrieving `LogGroup`s by their unique ID via the `LogStore`.
+/// - Filtering `LogGroup`s based on a specific time range using the `LogStore`.
+/// - Executing LogQL queries against the `LogStore` using [`query::execute_logql_query`].
+/// - Performing range-based aggregation on records (from specific log groups or LogQL queries)
+///   within a given time window, facilitated by [`query::query_log_range_aggregation`].
 pub mod query;

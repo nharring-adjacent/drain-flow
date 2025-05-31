@@ -18,6 +18,7 @@ use regex::Regex;
 use string_interner::{DefaultSymbol, StringInterner};
 use uuid::Uuid;
 
+use crate::drains::api::Drain;
 use crate::log_group::LogGroup;
 use crate::record::Record;
 // Removed: use crate::record::tokens::ASTERISK;
@@ -89,14 +90,14 @@ mod tests {
     #[test]
     fn test_process_empty_line() {
         let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 10).unwrap();
-        assert_that(&drain.process_line("".to_string())).is_ok_containing(false);
+        assert_that(&Drain::process_line(&mut drain, "".to_string())).is_ok_containing(false);
     }
 
     #[traced_test]
     #[test]
     fn test_process_line_creates_new_group() {
         let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 10).unwrap();
-        assert_that(&drain.process_line("This is a test log line".to_string()))
+        assert_that(&Drain::process_line(&mut drain, "This is a test log line".to_string()))
             .is_ok_containing(true);
     }
 
@@ -104,8 +105,8 @@ mod tests {
     #[test]
     fn test_process_line_matches_existing_group() {
         let mut drain = TwoStageDrain::new(vec![], 0.5, 10, 10).unwrap(); // Increased max_depth for this test
-        let _ = drain.process_line("Log message type A value1".to_string());
-        assert_that(&drain.process_line("Log message type A value2".to_string()))
+        let _ = Drain::process_line(&mut drain, "Log message type A value1".to_string());
+        assert_that(&Drain::process_line(&mut drain, "Log message type A value2".to_string()))
             .is_ok_containing(false);
     }
 
@@ -113,8 +114,8 @@ mod tests {
     #[test]
     fn test_process_line_creates_second_group() {
         let mut drain = TwoStageDrain::new(vec![], 0.5, 4, 10).unwrap();
-        let _ = drain.process_line("Log message type A value1".to_string());
-        assert_that(&drain.process_line("Completely different log message valueX".to_string()))
+        let _ = Drain::process_line(&mut drain, "Log message type A value1".to_string());
+        assert_that(&Drain::process_line(&mut drain, "Completely different log message valueX".to_string()))
             .is_ok_containing(true);
     }
 
@@ -126,11 +127,11 @@ mod tests {
 
         let line1 = "2023-10-26 This is a log".to_string();
         // First line should create a new group
-        assert_that(&drain.process_line(line1)).is_ok_containing(true);
+        assert_that(&Drain::process_line(&mut drain, line1)).is_ok_containing(true);
 
         // Second line, differing only in the preprocessed part, should match the existing group.
         let line2 = "2024-01-01 This is a log".to_string();
-        assert_that(&drain.process_line(line2)).is_ok_containing(false);
+        assert_that(&Drain::process_line(&mut drain, line2)).is_ok_containing(false);
     }
 }
 
@@ -507,8 +508,10 @@ impl TwoStageDrain {
             line_count_processed: 0, // Initialize new field
         })
     }
+}
 
-    pub fn process_line(&mut self, line: String) -> Result<bool, Error> {
+impl Drain for TwoStageDrain {
+    fn process_line(&mut self, line: String) -> Result<bool, Error> {
         let local_max_depth = self.max_depth;
         let local_max_children = self.max_children;
         let local_threshold = self.threshold.clone();
@@ -621,10 +624,14 @@ impl TwoStageDrain {
         Ok(true) // Created new group
     }
 
-    pub fn collect_all_log_groups(&self) -> Vec<LogGroup> {
+    fn collect_log_groups(&self) -> Vec<LogGroup> {
         let mut all_groups = Vec::new();
         for node in self.tree.values() {
-            Self::collect_groups_recursive(node, &mut all_groups);
+            // Assuming collect_groups_recursive is a static/helper method or defined on Self
+            // If it's an instance method, it would be self.collect_groups_recursive
+            // Based on its usage elsewhere (Self::), it's likely a static helper or associated function
+            // that can be called like this.
+            TwoStageDrain::collect_groups_recursive(node, &mut all_groups);
         }
         all_groups
     }

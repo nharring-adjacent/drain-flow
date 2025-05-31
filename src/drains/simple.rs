@@ -19,7 +19,7 @@ use regex::Regex;
 use string_interner::{DefaultSymbol, StringInterner};
 use tracing::instrument;
 
-use crate::{log_group::LogGroup, record::Record};
+use crate::{drains::api::Drain, log_group::LogGroup, record::Record};
 
 lazy_static! {
     pub(crate) static ref INTERNER: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>> =
@@ -62,6 +62,32 @@ impl SingleLayer {
         Ok(())
     }
 
+    #[instrument(skip(self), level = "trace")]
+    fn iter_groups(&self) -> Vec<Vec<&LogGroup>> {
+        let mut results: Vec<Vec<&LogGroup>> = Vec::new();
+        for length in self.base_layer.keys() {
+            let mut groups = vec![];
+            for (_, grp) in self.base_layer.get(length).unwrap().iter() {
+                for g in grp {
+                    groups.push(g);
+                }
+            }
+            results.push(groups);
+        }
+        results
+    }
+
+    #[instrument(skip(self), level = "trace")]
+    pub fn resolve(&self, sym: DefaultSymbol) -> String {
+        self.strings
+            .read()
+            .resolve(sym)
+            .expect("symbols must resolve")
+            .to_owned()
+    }
+}
+
+impl Drain for SingleLayer {
     /// Accepts a line of input for processing against existing records
     ///
     /// Return
@@ -69,7 +95,7 @@ impl SingleLayer {
     /// Ok(false) when the line matched an existing entry
     /// Err(e) for errors during processing
     #[instrument(skip(self, line))]
-    pub fn process_line(&mut self, line: String) -> Result<bool, Error> {
+    fn process_line(&mut self, line: String) -> Result<bool, Error> {
         if line.is_empty() {
             return Ok(false);
         }
@@ -119,28 +145,12 @@ impl SingleLayer {
         }
     }
 
-    #[instrument(skip(self), level = "trace")]
-    pub fn iter_groups(&self) -> Vec<Vec<&LogGroup>> {
-        let mut results: Vec<Vec<&LogGroup>> = Vec::new();
-        for length in self.base_layer.keys() {
-            let mut groups = vec![];
-            for (_, grp) in self.base_layer.get(length).unwrap().iter() {
-                for g in grp {
-                    groups.push(g);
-                }
-            }
-            results.push(groups);
-        }
-        results
-    }
-
-    #[instrument(skip(self), level = "trace")]
-    pub fn resolve(&self, sym: DefaultSymbol) -> String {
-        self.strings
-            .read()
-            .resolve(sym)
-            .expect("symbols must resolve")
-            .to_owned()
+    fn collect_log_groups(&self) -> Vec<LogGroup> {
+        self.iter_groups()
+            .into_iter()
+            .flatten()
+            .cloned()
+            .collect()
     }
 }
 
@@ -167,7 +177,7 @@ mod should {
     use spectral::prelude::*;
     use tracing_test::traced_test;
 
-    use crate::drains::simple::SingleLayer; // Removed <BucketBackend> for now, will add if compiler complains
+    use crate::drains::{api::Drain, simple::SingleLayer}; // Removed <BucketBackend> for now, will add if compiler complains
 
     #[traced_test]
     #[test]
@@ -215,10 +225,10 @@ mod should {
         let line_2 = "Another different order of words".to_string();
         let line_3 = "Finally one last unique set of character runs".to_string();
         let mut drain = SingleLayer::new(vec![]).unwrap();
-        drain.process_line(line_1).unwrap();
-        drain.process_line(line_2).unwrap();
-        drain.process_line(line_3).unwrap();
-        let groups = drain.iter_groups();
+        Drain::process_line(&mut drain, line_1).unwrap();
+        Drain::process_line(&mut drain, line_2).unwrap();
+        Drain::process_line(&mut drain, line_3).unwrap();
+        let groups = drain.collect_log_groups();
         assert_that(&groups).has_length(3);
     }
 }
