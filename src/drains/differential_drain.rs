@@ -344,7 +344,7 @@ mod tests {
         let mut drain = DifferentialDrain::default();
         let line = "This is a test log line".to_string();
         let result = drain.process_line(line.clone());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
         assert_eq!(drain.clusters.len(), 1);
         let cluster = &drain.clusters[0];
         assert_eq!(cluster.count, 1);
@@ -354,7 +354,7 @@ mod tests {
             vec!["This", "is", "a", "test", "log", "line"]
         );
         let expected_template: Vec<TokenOrWildcard> =
-            vec!["This", "is", "a", "test", "log", "line"]
+            ["This", "is", "a", "test", "log", "line"]
                 .iter()
                 .map(|s| TokenOrWildcard::Token(s.to_string()))
                 .collect();
@@ -367,7 +367,7 @@ mod tests {
         let line = "Exact match log line".to_string();
         let _result1 = drain.process_line(line.clone());
         let result2 = drain.process_line(line.clone());
-        assert_eq!(result2.unwrap(), false);
+        assert!(!result2.unwrap());
         assert_eq!(drain.clusters.len(), 1);
         assert_eq!(drain.clusters[0].count, 2);
         assert_eq!(drain.clusters[0].samples.len(), 2);
@@ -384,7 +384,7 @@ mod tests {
         let line2 = "Second different log message".to_string();
         let _result1 = drain.process_line(line1.clone());
         let result2 = drain.process_line(line2.clone());
-        assert_eq!(result2.unwrap(), true);
+        assert!(result2.unwrap());
         assert_eq!(drain.clusters.len(), 2);
         let cluster1 = &drain.clusters[0];
         assert_eq!(
@@ -405,7 +405,7 @@ mod tests {
         let line2 = "Log message pattern A X C D".to_string();
         let _result1 = drain.process_line(line1.clone());
         let result2 = drain.process_line(line2.clone());
-        assert_eq!(result2.unwrap(), false);
+        assert!(!result2.unwrap());
         assert_eq!(drain.clusters.len(), 1);
         assert_eq!(drain.clusters[0].count, 2);
     }
@@ -417,7 +417,7 @@ mod tests {
         let line2 = "Completely different log content X Y Z W".to_string();
         let _result1 = drain.process_line(line1.clone());
         let result2 = drain.process_line(line2.clone());
-        assert_eq!(result2.unwrap(), true);
+        assert!(result2.unwrap());
         assert_eq!(drain.clusters.len(), 2);
     }
 
@@ -446,7 +446,7 @@ mod tests {
         };
         drain.clusters.push(cluster_with_wildcard);
         let result = drain.process_line(line_to_match.clone());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
         assert_eq!(drain.clusters.len(), 1);
         assert_eq!(drain.clusters[0].count, 2);
     }
@@ -462,10 +462,9 @@ mod tests {
     fn test_collect_log_groups_single_cluster() {
         let mut drain = DifferentialDrain::default();
         let line = "Log for single cluster test".to_string();
-        let expected_tokens = vec!["Log", "for", "single", "cluster", "test"];
+        let expected_tokens = ["Log", "for", "single", "cluster", "test"];
         let _original_message_id = drain
-            .clusters
-            .get(0)
+            .clusters.first()
             .map_or_else(Uuid::new_v4, |c| c.samples[0].original_message_id);
         drain.process_line(line.clone()).unwrap();
         let cluster_id = drain.clusters[0].cluster_id;
@@ -785,11 +784,9 @@ mod tests {
         drain
             .process_line("unique1 different_field valX".to_string())
             .unwrap();
-        let _c1_generalized_template = vec![
-            TokenOrWildcard::Token("unique1".to_string()),
+        let _c1_generalized_template = [TokenOrWildcard::Token("unique1".to_string()),
             TokenOrWildcard::Wildcard,
-            TokenOrWildcard::Wildcard,
-        ];
+            TokenOrWildcard::Wildcard];
         assert_template_equals(
             drain
                 .clusters
@@ -954,8 +951,8 @@ mod tests {
             2,
             "Line F should form a new cluster C2"
         );
-        assert_eq!(
-            result_f, true,
+        assert!(
+            result_f,
             "process_line for Line F should return true (new cluster)"
         );
         assert_template_equals(&drain.clusters[0].log_template, &["Event", "*", "P1", "*"]);

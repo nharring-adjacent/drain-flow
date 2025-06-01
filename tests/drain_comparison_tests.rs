@@ -107,7 +107,7 @@ mod comparative_tests {
         // Or it might create 3 groups if its generalization isn't aggressive enough for this small sample.
         // For now, let's be flexible or assert it's different from DifferentialDrain.
         assert!(
-            ts_groups.len() >= 1 && ts_groups.len() <= 3,
+            !ts_groups.is_empty() && ts_groups.len() <= 3,
             "TwoStageDrain: Group count out of expected range for scenario 1. Got {}",
             ts_groups.len()
         );
@@ -200,7 +200,7 @@ mod comparative_tests {
         // or even more if proc_alpha/beta are not grouped by its first stage.
         // The key is that it's likely more than DifferentialDrain.
         assert!(
-            ts_groups.len() >= 1 && ts_groups.len() <= 5,
+            !ts_groups.is_empty() && ts_groups.len() <= 5,
             "TwoStageDrain: Group count out of expected range for scenario 2. Got {}",
             ts_groups.len()
         );

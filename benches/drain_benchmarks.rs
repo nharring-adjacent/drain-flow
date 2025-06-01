@@ -126,7 +126,7 @@ fn benchmark_query_on_single_layer_data(c: &mut Criterion) {
 
     let available_groups =
         store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now()); // Added None for query_id
-    let target_group_id_opt = available_groups.get(0).map(|lg_ref| lg_ref.id);
+    let target_group_id_opt = available_groups.first().map(|lg_ref| lg_ref.id);
 
     if target_group_id_opt.is_none() {
         println!("Warning: No suitable LogGroup with examples found for single_layer query benchmark. Skipping.");
@@ -236,7 +236,7 @@ fn benchmark_query_on_two_stage_drain_data(c: &mut Criterion) {
 
     let available_groups =
         store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now()); // Added None for query_id
-    let target_group_id_opt = available_groups.get(0).map(|lg_ref| lg_ref.id);
+    let target_group_id_opt = available_groups.first().map(|lg_ref| lg_ref.id);
 
     if target_group_id_opt.is_none() {
         println!("Warning: No suitable LogGroup with examples found for two_stage_drain query benchmark. Skipping.");
@@ -341,7 +341,7 @@ fn benchmark_query_on_differential_drain_data(c: &mut Criterion) {
 
     let available_groups =
         store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now());
-    let target_group_id_opt = available_groups.get(0).map(|lg_ref| lg_ref.id);
+    let target_group_id_opt = available_groups.first().map(|lg_ref| lg_ref.id);
 
     if target_group_id_opt.is_none() {
         println!("Warning: No suitable LogGroup with examples found for DifferentialDrain query benchmark. Skipping.");
