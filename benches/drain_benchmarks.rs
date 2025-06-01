@@ -34,21 +34,21 @@ fn generate_log_lines(count: usize, seed: u64) -> Vec<String> {
     for i in 0..count {
         let current_time = base_time + ChronoDuration::milliseconds(i as i64);
         // Add some random variation to status and message to create more diverse log groups
-        let status: usize = rng.gen_range(200_usize..600_usize); // Updated gen_range
-        let message_length: usize = rng.gen_range(5_usize..20_usize); // Updated gen_range
+        let status: usize = rng.random_range(200_usize..600_usize); // Updated gen_range
+        let message_length: usize = rng.random_range(5_usize..20_usize); // Updated gen_range
         const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
                                 abcdefghijklmnopqrstuvwxyz\
                                 0123456789";
         let message: String = (0..message_length)
             .map(|_| {
-                let idx = rng.gen_range(0_usize..CHARSET.len()); // Updated gen_range
+                let idx = rng.random_range(0_usize..CHARSET.len()); // Updated gen_range
                 CHARSET[idx] as char
             })
             .collect();
 
         let template = RecordTemplate::Sendmail(Sendmail {
             ts: current_time.to_rfc3339(),
-            remote: format!("host{}.example.com", rng.gen_range(1_usize..100_usize)), // Updated gen_range
+            remote: format!("host{}.example.com", rng.random_range(1_usize..100_usize)), // Updated gen_range
             status,
             message,
         });
@@ -104,8 +104,8 @@ fn benchmark_single_layer_collect_groups_and_create_store(c: &mut Criterion) {
                 for line in &lines {
                     Drain::process_line(&mut drain_for_iter, line.clone()).unwrap();
                 }
-                let log_groups = drain_for_iter.collect_log_groups();
-                let _store = LogStore::new(black_box(log_groups)); // Pass Vec<LogGroup>
+                // let log_groups = drain_for_iter.collect_log_groups(); // No longer needed here
+                let _store = LogStore::new(drain_for_iter); // Pass the drain itself
             });
         });
     }
@@ -122,10 +122,10 @@ fn benchmark_query_on_single_layer_data(c: &mut Criterion) {
     for line in &lines {
         Drain::process_line(&mut drain, line.clone()).unwrap();
     }
-    let store = LogStore::new(drain.collect_log_groups()); // Pass Vec<LogGroup>
+    let store = LogStore::new(drain); // Pass the drain itself
 
     let available_groups =
-        store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now(), None); // Added None for query_id
+        store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now()); // Added None for query_id
     let target_group_id_opt = available_groups.get(0).map(|lg_ref| lg_ref.id);
 
     if target_group_id_opt.is_none() {
@@ -213,8 +213,8 @@ fn benchmark_two_stage_drain_collect_groups_and_create_store(c: &mut Criterion) 
                 for line in &lines {
                     Drain::process_line(&mut drain_for_iter, line.clone()).unwrap();
                 }
-                let log_groups = drain_for_iter.collect_log_groups();
-                let _store = LogStore::new(black_box(log_groups)); // Pass Vec<LogGroup>
+                // let log_groups = drain_for_iter.collect_log_groups(); // No longer needed here
+                let _store = LogStore::new(drain_for_iter); // Pass the drain itself
             });
         });
     }
@@ -232,10 +232,10 @@ fn benchmark_query_on_two_stage_drain_data(c: &mut Criterion) {
     for line in &lines {
         Drain::process_line(&mut drain, line.clone()).unwrap();
     }
-    let store = LogStore::new(drain.collect_log_groups()); // Pass Vec<LogGroup>
+    let store = LogStore::new(drain); // Pass the drain itself
 
     let available_groups =
-        store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now(), None); // Added None for query_id
+        store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now()); // Added None for query_id
     let target_group_id_opt = available_groups.get(0).map(|lg_ref| lg_ref.id);
 
     if target_group_id_opt.is_none() {
@@ -319,8 +319,8 @@ fn benchmark_differential_drain_collect_groups_and_create_store(c: &mut Criterio
                 for line in &lines {
                     drain_for_iter.process_line(line.clone()).unwrap();
                 }
-                let log_groups = drain_for_iter.collect_log_groups();
-                let _store = LogStore::new(black_box(log_groups));
+                // let log_groups = drain_for_iter.collect_log_groups(); // No longer needed here
+                let _store = LogStore::new(drain_for_iter); // Pass the drain itself
             });
         });
     }
@@ -337,10 +337,10 @@ fn benchmark_query_on_differential_drain_data(c: &mut Criterion) {
     for line in &lines {
         drain.process_line(line.clone()).unwrap();
     }
-    let store = LogStore::new(drain.collect_log_groups());
+    let store = LogStore::new(drain); // Pass the drain itself
 
     let available_groups =
-        store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now(), None);
+        store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now());
     let target_group_id_opt = available_groups.get(0).map(|lg_ref| lg_ref.id);
 
     if target_group_id_opt.is_none() {

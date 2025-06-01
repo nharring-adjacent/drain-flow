@@ -11,7 +11,7 @@ use drain_flow::log_group::LogGroup;
 // This currently relies on the base_record's content, which for DifferentialDrain
 // should be the reconstructed template string.
 fn get_template_string(group: &LogGroup) -> String {
-    group.base_record().content.clone() // base_record().to_string() might include ID etc.
+    group.base_record().to_string() // base_record().to_string() might include ID etc.
 }
 
 // Helper to print groups for debugging
@@ -23,7 +23,7 @@ fn print_groups_summary(drain_name: &str, groups: &[LogGroup]) {
         println!(
             "  Group {}: Count={}, Template='{}', ID={}",
             i,
-            group.count(),
+            group.len(),
             get_template_string(group), // Use helper
             group.id
         );
@@ -88,7 +88,7 @@ mod comparative_tests {
                 "DifferentialDrain: Template mismatch for scenario 1"
             );
             assert_eq!(
-                dd_groups[0].count(),
+                dd_groups[0].len(),
                 3,
                 "DifferentialDrain: Count mismatch for scenario 1"
             );
@@ -180,7 +180,7 @@ mod comparative_tests {
                 "DifferentialDrain: Template mismatch for scenario 2"
             );
             assert_eq!(
-                dd_groups[0].count(),
+                dd_groups[0].len(),
                 5,
                 "DifferentialDrain: Count mismatch for scenario 2"
             );
