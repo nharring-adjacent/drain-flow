@@ -129,7 +129,8 @@ impl Drain for DifferentialDrain {
                 continue;
             }
 
-            let similarity = Self::calculate_similarity(&processed_message.tokens, &cluster.log_template);
+            let similarity =
+                Self::calculate_similarity(&processed_message.tokens, &cluster.log_template);
 
             if similarity >= self.similarity_threshold {
                 // This cluster is a potential candidate.
@@ -155,13 +156,17 @@ impl Drain for DifferentialDrain {
                     if similarity > max_similarity_score {
                         // This candidate has a higher similarity score than any previous best.
                         max_similarity_score = similarity;
-                        max_concrete_tokens_after_gen_for_best_match = current_concrete_count_after_gen;
+                        max_concrete_tokens_after_gen_for_best_match =
+                            current_concrete_count_after_gen;
                         best_match_cluster_index = Some(index);
                     } else if similarity == max_similarity_score {
                         // Similarity is the same as the current best.
                         // Tie-break by choosing the one that results in a more specific template (more concrete tokens).
-                        if current_concrete_count_after_gen > max_concrete_tokens_after_gen_for_best_match {
-                            max_concrete_tokens_after_gen_for_best_match = current_concrete_count_after_gen;
+                        if current_concrete_count_after_gen
+                            > max_concrete_tokens_after_gen_for_best_match
+                        {
+                            max_concrete_tokens_after_gen_for_best_match =
+                                current_concrete_count_after_gen;
                             best_match_cluster_index = Some(index);
                         }
                         // If concrete token counts are also equal, the one with the lower index (found first) is kept.
@@ -388,11 +393,10 @@ mod tests {
             cluster.samples[0].tokens,
             vec!["This", "is", "a", "test", "log", "line"]
         );
-        let expected_template: Vec<TokenOrWildcard> =
-            ["This", "is", "a", "test", "log", "line"]
-                .iter()
-                .map(|s| TokenOrWildcard::Token(s.to_string()))
-                .collect();
+        let expected_template: Vec<TokenOrWildcard> = ["This", "is", "a", "test", "log", "line"]
+            .iter()
+            .map(|s| TokenOrWildcard::Token(s.to_string()))
+            .collect();
         assert_eq!(cluster.log_template, expected_template);
     }
 
@@ -499,7 +503,8 @@ mod tests {
         let line = "Log for single cluster test".to_string();
         let expected_tokens = ["Log", "for", "single", "cluster", "test"];
         let _original_message_id = drain
-            .clusters.first()
+            .clusters
+            .first()
             .map_or_else(Uuid::new_v4, |c| c.samples[0].original_message_id);
         drain.process_line(line.clone()).unwrap();
         let cluster_id = drain.clusters[0].cluster_id;
@@ -819,9 +824,11 @@ mod tests {
         drain
             .process_line("unique1 different_field valX".to_string())
             .unwrap();
-        let _c1_generalized_template = [TokenOrWildcard::Token("unique1".to_string()),
+        let _c1_generalized_template = [
+            TokenOrWildcard::Token("unique1".to_string()),
             TokenOrWildcard::Wildcard,
-            TokenOrWildcard::Wildcard];
+            TokenOrWildcard::Wildcard,
+        ];
         assert_template_equals(
             drain
                 .clusters
@@ -886,16 +893,14 @@ mod tests {
         let c_a_final = drain.clusters.iter().find(|c| c.count == 3).unwrap();
         assert_template_equals(&c_a_final.log_template, &["prefix", "*", "*"]);
         // Assert properties of the second cluster (Cluster B)
-        let c_b_final = drain.clusters
+        let c_b_final = drain
+            .clusters
             .iter()
             .find(|c| c.cluster_id != c_a_final.cluster_id)
             .expect("Failed to find the second cluster (Cluster B)");
 
         assert_eq!(c_b_final.count, 2, "Expected Cluster B to have count 2");
-        assert_template_equals(
-            &c_b_final.log_template,
-            &["prefix", "*", "suffix_B"],
-        );
+        assert_template_equals(&c_b_final.log_template, &["prefix", "*", "suffix_B"]);
     }
 
     #[test]
@@ -988,5 +993,111 @@ mod tests {
             &drain.clusters[c2_idx].log_template,
             &["Event", "X", "P_NEW", "Q_NEW"],
         );
+    }
+
+    fn test_calculate_similarity_len1_and_empty() {
+        let msg_tokens_a = vec!["a".to_string()];
+        let template_tokens_a = vec![TokenOrWildcard::Token("a".to_string())];
+        assert_eq!(
+            DifferentialDrain::calculate_similarity(&msg_tokens_a, &template_tokens_a),
+            1.0
+        );
+
+        let template_tokens_b = vec![TokenOrWildcard::Token("b".to_string())];
+        assert_eq!(
+            DifferentialDrain::calculate_similarity(&msg_tokens_a, &template_tokens_b),
+            0.0
+        );
+
+        let template_tokens_wildcard = vec![TokenOrWildcard::Wildcard];
+        assert_eq!(
+            DifferentialDrain::calculate_similarity(&msg_tokens_a, &template_tokens_wildcard),
+            1.0
+        );
+
+        let msg_tokens_empty: Vec<String> = vec![];
+        let template_tokens_empty: Vec<TokenOrWildcard> = vec![];
+        assert_eq!(
+            DifferentialDrain::calculate_similarity(&msg_tokens_empty, &template_tokens_empty),
+            1.0
+        );
+
+        assert_eq!(
+            DifferentialDrain::calculate_similarity(&msg_tokens_a, &template_tokens_empty),
+            0.0
+        );
+
+        assert_eq!(
+            DifferentialDrain::calculate_similarity(&msg_tokens_empty, &template_tokens_a),
+            0.0
+        );
+    }
+
+    #[test]
+    fn test_process_line_len1_no_match_creates_new_cluster() {
+        let mut drain = create_test_drain(0.5, 1);
+        drain.process_line("tok1".to_string()).unwrap();
+        drain.process_line("tok2".to_string()).unwrap();
+        assert_eq!(drain.clusters.len(), 2);
+    }
+
+    #[test]
+    fn test_process_line_len1_exact_match_updates_cluster() {
+        let mut drain = create_test_drain(0.5, 1);
+        drain.process_line("tok1".to_string()).unwrap();
+        drain.process_line("tok1".to_string()).unwrap();
+        assert_eq!(drain.clusters.len(), 1);
+        assert_eq!(drain.clusters[0].count, 2);
+    }
+
+    #[test]
+    fn test_process_line_len1_generalizes_to_wildcard_ok_with_max_depth_0() {
+        let mut drain = create_test_drain(0.4, 0); // max_depth = 0 allows full generalization
+        drain.process_line("tokA".to_string()).unwrap();
+        drain.process_line("tokB".to_string()).unwrap();
+        assert_eq!(drain.clusters.len(), 1);
+        assert_eq!(
+            drain.clusters[0].log_template,
+            vec![TokenOrWildcard::Wildcard]
+        );
+        assert_eq!(drain.clusters[0].count, 2);
+    }
+
+    #[test]
+    fn test_process_line_len1_generalizes_to_wildcard_results_in_new_cluster_if_max_depth_1() {
+        let mut drain = create_test_drain(0.4, 1); // max_depth = 1
+        drain.process_line("tokA".to_string()).unwrap();
+        drain.process_line("tokB".to_string()).unwrap();
+        assert_eq!(
+            drain.clusters.len(),
+            2,
+            "Generalizing C0 to [W(*)] would make it have 0 concrete tokens, failing max_depth=1 check, so tokB forms new cluster"
+        );
+        assert_eq!(
+            drain.clusters[0].log_template,
+            vec![TokenOrWildcard::Token("tokA".to_string())]
+        );
+        assert_eq!(
+            drain.clusters[1].log_template,
+            vec![TokenOrWildcard::Token("tokB".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_exhaustive_reproducer_for_line_763_panic() {
+        let mut drain = create_test_drain(0.5, 1);
+        drain
+            .process_line("msg typeA detailX common1".to_string())
+            .unwrap();
+        drain
+            .process_line("msg typeA detailY common2".to_string())
+            .unwrap();
+        drain
+            .process_line("msg typeB detailP common3".to_string())
+            .unwrap();
+        // This line is expected to trigger the panic
+        drain
+            .process_line("msg typeB detailQ common4".to_string())
+            .unwrap();
     }
 }
