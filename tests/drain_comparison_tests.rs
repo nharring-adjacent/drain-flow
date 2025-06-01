@@ -54,7 +54,8 @@ mod comparative_tests {
         // SingleLayer: default (often uses regexes if provided, or simple exact match)
         let mut sl_drain = SingleLayer::new(vec![]).expect("Failed to create SingleLayer");
         // TwoStageDrain: default params (e.g., threshold 0.5, depth 4, max_children 100)
-        let mut ts_drain = TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
+        let mut ts_drain =
+            TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
 
         for line in &log_sequence {
             dd_drain.process_line(line.to_string()).unwrap();
@@ -72,31 +73,53 @@ mod comparative_tests {
 
         // --- Assertions for Scenario 1 ---
         // DifferentialDrain expected: 1 cluster, template "Login success user * session *"
-        assert_eq!(dd_groups.len(), 1, "DifferentialDrain: Expected 1 group for scenario 1");
+        assert_eq!(
+            dd_groups.len(),
+            1,
+            "DifferentialDrain: Expected 1 group for scenario 1"
+        );
         if !dd_groups.is_empty() {
             let template = get_template_string(&dd_groups[0]);
             // Tokenization: ["Login", "success", "user", "admin_user_1", "session", "12345"]
             // Generalizes to: ["Login", "success", "user", "*", "session", "*"]
             // Reconstructed template (joined by space): "Login success user * session *"
-            assert_eq!(template, "Login success user * session *", "DifferentialDrain: Template mismatch for scenario 1");
-            assert_eq!(dd_groups[0].count(), 3, "DifferentialDrain: Count mismatch for scenario 1");
+            assert_eq!(
+                template, "Login success user * session *",
+                "DifferentialDrain: Template mismatch for scenario 1"
+            );
+            assert_eq!(
+                dd_groups[0].count(),
+                3,
+                "DifferentialDrain: Count mismatch for scenario 1"
+            );
         }
 
         // SingleLayer/TwoStageDrain: Likely more than 1 cluster.
         // SingleLayer with no regexes will probably create 3 groups.
-        assert_eq!(sl_groups.len(), 3, "SingleLayer: Expected 3 groups for scenario 1 with no regexes");
+        assert_eq!(
+            sl_groups.len(),
+            3,
+            "SingleLayer: Expected 3 groups for scenario 1 with no regexes"
+        );
 
         // TwoStageDrain is more complex; its behavior depends on its internal generalization.
         // It might group them if "Login success user" is seen as a common prefix and numbers/session IDs as variables.
         // Or it might create 3 groups if its generalization isn't aggressive enough for this small sample.
         // For now, let's be flexible or assert it's different from DifferentialDrain.
-        assert!(ts_groups.len() >= 1 && ts_groups.len() <= 3, "TwoStageDrain: Group count out of expected range for scenario 1. Got {}", ts_groups.len());
+        assert!(
+            ts_groups.len() >= 1 && ts_groups.len() <= 3,
+            "TwoStageDrain: Group count out of expected range for scenario 1. Got {}",
+            ts_groups.len()
+        );
         if ts_groups.len() == 1 {
             // If TwoStageDrain also gets 1 group, its template might be similar.
             // This depends heavily on TwoStageDrain's configuration.
             // For a simple check, we might ensure it's not *as* general or it *is* as general.
             // This test is primarily to highlight DifferentialDrain's behavior.
-            println!("TwoStageDrain also produced 1 group for scenario 1. Template: '{}'", get_template_string(&ts_groups[0]));
+            println!(
+                "TwoStageDrain also produced 1 group for scenario 1. Template: '{}'",
+                get_template_string(&ts_groups[0])
+            );
         }
     }
 
@@ -125,7 +148,8 @@ mod comparative_tests {
 
         let mut dd_drain = DifferentialDrain::new(0.6, 2);
         let mut sl_drain = SingleLayer::new(vec![]).expect("Failed to create SingleLayer");
-        let mut ts_drain = TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
+        let mut ts_drain =
+            TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain");
 
         for line in &log_sequence {
             dd_drain.process_line(line.to_string()).unwrap();
@@ -142,17 +166,32 @@ mod comparative_tests {
         print_groups_summary("TwoStageDrain (Scenario 2)", &ts_groups);
 
         // Assertions for DifferentialDrain
-        assert_eq!(dd_groups.len(), 1, "DifferentialDrain: Expected 1 group for scenario 2");
+        assert_eq!(
+            dd_groups.len(),
+            1,
+            "DifferentialDrain: Expected 1 group for scenario 2"
+        );
         if !dd_groups.is_empty() {
             let template = get_template_string(&dd_groups[0]);
             // Advanced tokenizer: ["Service", "v1.0", "request", "proc_alpha", "status", "200"]
             // Expected generalized: ["Service", "*", "request", "*", "status", "*"]
-            assert_eq!(template, "Service * request * status *", "DifferentialDrain: Template mismatch for scenario 2");
-            assert_eq!(dd_groups[0].count(), 5, "DifferentialDrain: Count mismatch for scenario 2");
+            assert_eq!(
+                template, "Service * request * status *",
+                "DifferentialDrain: Template mismatch for scenario 2"
+            );
+            assert_eq!(
+                dd_groups[0].count(),
+                5,
+                "DifferentialDrain: Count mismatch for scenario 2"
+            );
         }
 
         // Assertions for SingleLayer (likely 5 groups without specific regexes)
-        assert_eq!(sl_groups.len(), 5, "SingleLayer: Expected 5 groups for scenario 2");
+        assert_eq!(
+            sl_groups.len(),
+            5,
+            "SingleLayer: Expected 5 groups for scenario 2"
+        );
 
         // Assertions for TwoStageDrain (behavior can vary)
         // It might create 1 group if it generalizes versions and statuses, or more.
@@ -160,9 +199,13 @@ mod comparative_tests {
         // or [S,v1.0,r,*,s,200], [S,v1.1,r,*,s,200], [S,v1.1,r,pA,s,503] -> 3 groups
         // or even more if proc_alpha/beta are not grouped by its first stage.
         // The key is that it's likely more than DifferentialDrain.
-        assert!(ts_groups.len() >= 1 && ts_groups.len() <= 5, "TwoStageDrain: Group count out of expected range for scenario 2. Got {}", ts_groups.len());
+        assert!(
+            ts_groups.len() >= 1 && ts_groups.len() <= 5,
+            "TwoStageDrain: Group count out of expected range for scenario 2. Got {}",
+            ts_groups.len()
+        );
         if dd_groups.len() < ts_groups.len() {
-             println!("TwoStageDrain created more groups ({}) than DifferentialDrain ({}) as expected sometimes.", ts_groups.len(), dd_groups.len());
+            println!("TwoStageDrain created more groups ({}) than DifferentialDrain ({}) as expected sometimes.", ts_groups.len(), dd_groups.len());
         }
     }
 }

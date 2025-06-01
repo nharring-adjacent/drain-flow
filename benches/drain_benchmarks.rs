@@ -9,11 +9,13 @@
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
 use chrono::{Duration as ChronoDuration, Utc};
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput, BatchSize}; // Added BatchSize
+use criterion::{
+    black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput,
+}; // Added BatchSize
 use drain_flow::{
     drains::{api::Drain, simple::SingleLayer, two_stage_drain::TwoStageDrain, DifferentialDrain}, // Added DifferentialDrain
     query::{query_log_range_aggregation, LogStore, QuerySource}, // Added QuerySource
-    // record::Record, // Removed as it's unused directly in this file
+                                                                 // record::Record, // Removed as it's unused directly in this file
 };
 // use rand::distributions::Alphanumeric; // Removed problematic import
 use rand::rngs::StdRng;
@@ -69,14 +71,18 @@ fn benchmark_single_layer_process_line(c: &mut Criterion) {
             // Setup for each batch, not for each iteration
             b.iter_batched(
                 || {
-                    (SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain"), lines.clone())
+                    (
+                        SingleLayer::new(vec![]).expect("Failed to create SingleLayer drain"),
+                        lines.clone(),
+                    )
                 },
                 |(mut drain, current_lines)| {
-                    for line in current_lines { // Use cloned lines for this batch
+                    for line in current_lines {
+                        // Use cloned lines for this batch
                         Drain::process_line(&mut drain, black_box(line)).unwrap();
                     }
                 },
-                BatchSize::SmallInput // Assuming setup is relatively cheap
+                BatchSize::SmallInput, // Assuming setup is relatively cheap
             );
         });
     }
@@ -120,9 +126,7 @@ fn benchmark_query_on_single_layer_data(c: &mut Criterion) {
 
     let available_groups =
         store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now(), None); // Added None for query_id
-    let target_group_id_opt = available_groups
-        .get(0).map(|lg_ref| lg_ref.id);
-
+    let target_group_id_opt = available_groups.get(0).map(|lg_ref| lg_ref.id);
 
     if target_group_id_opt.is_none() {
         println!("Warning: No suitable LogGroup with examples found for single_layer query benchmark. Skipping.");
@@ -176,14 +180,18 @@ fn benchmark_two_stage_drain_process_line(c: &mut Criterion) {
             let lines = generate_log_lines(size, seed);
             b.iter_batched(
                 || {
-                    (TwoStageDrain::new(vec![], 0.5, 4, 100).expect("Failed to create TwoStageDrain"), lines.clone())
+                    (
+                        TwoStageDrain::new(vec![], 0.5, 4, 100)
+                            .expect("Failed to create TwoStageDrain"),
+                        lines.clone(),
+                    )
                 },
                 |(mut drain, current_lines)| {
                     for line in current_lines {
                         Drain::process_line(&mut drain, black_box(line)).unwrap();
                     }
                 },
-                BatchSize::SmallInput
+                BatchSize::SmallInput,
             );
         });
     }
@@ -228,8 +236,7 @@ fn benchmark_query_on_two_stage_drain_data(c: &mut Criterion) {
 
     let available_groups =
         store.get_log_groups_in_range(Utc::now() - ChronoDuration::days(365), Utc::now(), None); // Added None for query_id
-    let target_group_id_opt = available_groups
-        .get(0).map(|lg_ref| lg_ref.id);
+    let target_group_id_opt = available_groups.get(0).map(|lg_ref| lg_ref.id);
 
     if target_group_id_opt.is_none() {
         println!("Warning: No suitable LogGroup with examples found for two_stage_drain query benchmark. Skipping.");
@@ -373,7 +380,6 @@ fn benchmark_query_on_differential_drain_data(c: &mut Criterion) {
     }
     group.finish();
 }
-
 
 criterion_group!(
     benches,
