@@ -232,8 +232,7 @@ impl Drain for DifferentialDrain {
             .iter()
             .filter(|t| matches!(t, TokenOrWildcard::Token(_)))
             .count();
-        if initial_concrete_count < self.max_depth && !template.is_empty()
-        {
+        if initial_concrete_count < self.max_depth && !template.is_empty() {
             // This new message would create a template that's too generic from the start.
         }
         let new_cluster = LogCluster::new(processed_message, template);
@@ -271,14 +270,17 @@ impl Drain for DifferentialDrain {
 impl DifferentialDrain {
     fn tokenize_line(line: &str) -> Vec<String> {
         lazy_static! {
-            static ref TOKEN_RE: Regex = Regex::new(r#"(?x)
+            static ref TOKEN_RE: Regex = Regex::new(
+                r#"(?x)
                 (\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b) |
                 ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}) |
                 (\b\d+\.\d+\b|\b\d+\b) |
                 ([=():\[\]{}<>]) |
                 ([\w-]+) |
                 (\S)
-            "#).unwrap();
+            "#
+            )
+            .unwrap();
         }
         TOKEN_RE
             .find_iter(line)
@@ -484,7 +486,11 @@ mod tests {
         let line2 = "Second log for multi-cluster".to_string();
         drain.process_line(line1.clone()).unwrap();
         drain.process_line(line2.clone()).unwrap();
-        assert_eq!(drain.clusters.len(), 1, "Should form one cluster due to generalization");
+        assert_eq!(
+            drain.clusters.len(),
+            1,
+            "Should form one cluster due to generalization"
+        );
         let cluster_id = drain.clusters[0].cluster_id;
         let log_groups = drain.collect_log_groups();
         assert_eq!(log_groups.len(), 1);
@@ -493,8 +499,14 @@ mod tests {
         assert_eq!(group.len(), 2);
         assert_eq!(group.base_record().to_string(), "<*> log for multi-cluster");
         assert_eq!(group.examples().len(), 2);
-        assert!(group.examples().iter().any(|r| r.to_string() == "First log for multi-cluster"));
-        assert!(group.examples().iter().any(|r| r.to_string() == "Second log for multi-cluster"));
+        assert!(group
+            .examples()
+            .iter()
+            .any(|r| r.to_string() == "First log for multi-cluster"));
+        assert!(group
+            .examples()
+            .iter()
+            .any(|r| r.to_string() == "Second log for multi-cluster"));
     }
 
     #[test]
@@ -514,7 +526,14 @@ mod tests {
         assert_eq!(group.len(), 2);
         assert_eq!(group.base_record().to_string(), "Repeated log line");
         assert_eq!(group.examples().len(), 2);
-        assert_eq!(group.examples().iter().filter(|r| r.to_string() == "Repeated log line").count(), 2);
+        assert_eq!(
+            group
+                .examples()
+                .iter()
+                .filter(|r| r.to_string() == "Repeated log line")
+                .count(),
+            2
+        );
     }
 
     fn create_test_drain(similarity_threshold: f32, max_depth: usize) -> DifferentialDrain {
@@ -542,13 +561,23 @@ mod tests {
         let line_b = "Log event type1 valueB".to_string();
         drain.process_line(line_a.clone()).unwrap();
         drain.process_line(line_b.clone()).unwrap();
-        assert_eq!(drain.clusters.len(),1,"Should be one cluster after generalization");
+        assert_eq!(
+            drain.clusters.len(),
+            1,
+            "Should be one cluster after generalization"
+        );
         let cluster = &drain.clusters[0];
         assert_template_equals(&cluster.log_template, &["Log", "event", "type1", "*"]);
         assert_eq!(cluster.count, 2, "Cluster count should be 2");
         assert_eq!(cluster.samples.len(), 2, "Should have 2 samples");
-        assert!(cluster.samples.iter().any(|s| s.tokens == DifferentialDrain::tokenize_line(&line_a)));
-        assert!(cluster.samples.iter().any(|s| s.tokens == DifferentialDrain::tokenize_line(&line_b)));
+        assert!(cluster
+            .samples
+            .iter()
+            .any(|s| s.tokens == DifferentialDrain::tokenize_line(&line_a)));
+        assert!(cluster
+            .samples
+            .iter()
+            .any(|s| s.tokens == DifferentialDrain::tokenize_line(&line_b)));
     }
 
     #[test]
@@ -560,7 +589,10 @@ mod tests {
         drain.process_line(line_b.clone()).unwrap();
         assert_eq!(drain.clusters.len(), 1, "Should be one cluster");
         let cluster = &drain.clusters[0];
-        assert_template_equals(&cluster.log_template, &["Auth", "failure", "user", "*", "host", "*"]);
+        assert_template_equals(
+            &cluster.log_template,
+            &["Auth", "failure", "user", "*", "host", "*"],
+        );
         assert_eq!(cluster.count, 2);
     }
 
@@ -572,13 +604,25 @@ mod tests {
         let line_c = "A Y X Z E".to_string();
         drain.process_line(line_a.clone()).unwrap();
         drain.process_line(line_b.clone()).unwrap();
-        assert_eq!(drain.clusters.len(),1,"After B, should still be 1 cluster");
+        assert_eq!(
+            drain.clusters.len(),
+            1,
+            "After B, should still be 1 cluster"
+        );
         assert_template_equals(&drain.clusters[0].log_template, &["A", "B", "*", "D", "E"]);
         drain.process_line(line_c.clone()).unwrap();
         assert_eq!(drain.clusters.len(), 2, "After C, should be 2 clusters");
-        let cluster1 = drain.clusters.iter().find(|c| c.count == 2).expect("Cluster 1 not found");
+        let cluster1 = drain
+            .clusters
+            .iter()
+            .find(|c| c.count == 2)
+            .expect("Cluster 1 not found");
         assert_template_equals(&cluster1.log_template, &["A", "B", "*", "D", "E"]);
-        let cluster2 = drain.clusters.iter().find(|c| c.count == 1).expect("Cluster 2 not found");
+        let cluster2 = drain
+            .clusters
+            .iter()
+            .find(|c| c.count == 1)
+            .expect("Cluster 2 not found");
         assert_template_equals(&cluster2.log_template, &["A", "Y", "X", "Z", "E"]);
     }
 
@@ -602,13 +646,41 @@ mod tests {
         let line3 = "Pattern Alpha event_id 789".to_string();
         drain.process_line(line3.clone()).unwrap();
         assert_eq!(drain.clusters.len(), 2, "Should still be 2 clusters");
-        let cluster1 = drain.clusters.iter().find(|c| c.log_template.iter().any(|t| *t == TokenOrWildcard::Token("Alpha".to_string()))).unwrap();
-        assert_template_equals(&cluster1.log_template, &["Pattern", "Alpha", "event_id", "*"]);
-        assert!(cluster1.samples.iter().any(|s| s.tokens == DifferentialDrain::tokenize_line(&line1)));
-        assert!(cluster1.samples.iter().any(|s| s.tokens == DifferentialDrain::tokenize_line(&line3)));
-        let cluster2 = drain.clusters.iter().find(|c| c.log_template.iter().any(|t| *t == TokenOrWildcard::Token("Bravo".to_string()))).unwrap();
+        let cluster1 = drain
+            .clusters
+            .iter()
+            .find(|c| {
+                c.log_template
+                    .iter()
+                    .any(|t| *t == TokenOrWildcard::Token("Alpha".to_string()))
+            })
+            .unwrap();
+        assert_template_equals(
+            &cluster1.log_template,
+            &["Pattern", "Alpha", "event_id", "*"],
+        );
+        assert!(cluster1
+            .samples
+            .iter()
+            .any(|s| s.tokens == DifferentialDrain::tokenize_line(&line1)));
+        assert!(cluster1
+            .samples
+            .iter()
+            .any(|s| s.tokens == DifferentialDrain::tokenize_line(&line3)));
+        let cluster2 = drain
+            .clusters
+            .iter()
+            .find(|c| {
+                c.log_template
+                    .iter()
+                    .any(|t| *t == TokenOrWildcard::Token("Bravo".to_string()))
+            })
+            .unwrap();
         assert_eq!(cluster2.count, 1, "C2 count should be 1");
-        assert!(cluster2.samples.iter().any(|s| s.tokens == DifferentialDrain::tokenize_line(&line2)));
+        assert!(cluster2
+            .samples
+            .iter()
+            .any(|s| s.tokens == DifferentialDrain::tokenize_line(&line2)));
     }
 
     #[test]
@@ -633,35 +705,104 @@ mod tests {
         let line_c = "common token1 uniqueA val3".to_string();
         drain_pull.process_line(line_c.clone()).unwrap();
         assert_eq!(drain_pull.clusters.len(), 2, "Still 2 clusters after C");
-        let ca_idx = drain_pull.clusters.iter().position(|c| c.count == 2).unwrap();
-        let _cb_idx = drain_pull.clusters.iter().position(|c| c.count == 1).unwrap();
-        assert_template_equals( &drain_pull.clusters[ca_idx].log_template, &["common", "token1", "uniqueA", "*"]);
+        let ca_idx = drain_pull
+            .clusters
+            .iter()
+            .position(|c| c.count == 2)
+            .unwrap();
+        let _cb_idx = drain_pull
+            .clusters
+            .iter()
+            .position(|c| c.count == 1)
+            .unwrap();
+        assert_template_equals(
+            &drain_pull.clusters[ca_idx].log_template,
+            &["common", "token1", "uniqueA", "*"],
+        );
         let mut drain_force_pull = create_test_drain(0.5, 1);
-        drain_force_pull.process_line("A B C D".to_string()).unwrap();
-        drain_force_pull.process_line("X Y C D".to_string()).unwrap();
+        drain_force_pull
+            .process_line("A B C D".to_string())
+            .unwrap();
+        drain_force_pull
+            .process_line("X Y C D".to_string())
+            .unwrap();
         let _c2_id = drain_force_pull.clusters[1].cluster_id;
-        drain_force_pull.process_line("A B E F".to_string()).unwrap();
+        drain_force_pull
+            .process_line("A B E F".to_string())
+            .unwrap();
         drain = create_test_drain(0.5, 1);
-        drain.process_line("msg typeA detailX common1".to_string()).unwrap();
-        drain.process_line("msg typeA detailY common2".to_string()).unwrap();
-        drain.process_line("msg typeB detailP common3".to_string()).unwrap();
+        drain
+            .process_line("msg typeA detailX common1".to_string())
+            .unwrap();
+        drain
+            .process_line("msg typeA detailY common2".to_string())
+            .unwrap();
+        drain
+            .process_line("msg typeB detailP common3".to_string())
+            .unwrap();
         let _c2_idx = drain.clusters.iter().position(|c| c.count == 1).unwrap();
-        drain.process_line("msg typeB detailQ common4".to_string()).unwrap();
-        drain.process_line("msg general detailZ common5".to_string()).unwrap();
-        let c2_final_idx = drain.clusters.iter().position(|c| c.log_template[1] == TokenOrWildcard::Token("typeB".to_string())).unwrap();
-        assert_eq!(drain.clusters[c2_final_idx].count, 2, "C2 count should remain 2 if no pull occurs");
+        drain
+            .process_line("msg typeB detailQ common4".to_string())
+            .unwrap();
+        drain
+            .process_line("msg general detailZ common5".to_string())
+            .unwrap();
+        let c2_final_idx = drain
+            .clusters
+            .iter()
+            .position(|c| c.log_template[1] == TokenOrWildcard::Token("typeB".to_string()))
+            .unwrap();
+        assert_eq!(
+            drain.clusters[c2_final_idx].count, 2,
+            "C2 count should remain 2 if no pull occurs"
+        );
         drain = create_test_drain(0.5, 1);
-        drain.process_line("alpha beta charlie delta".to_string()).unwrap();
-        drain.process_line("alpha beta gamma epsilon".to_string()).unwrap();
-        drain.process_line("alpha beta zeta eta".to_string()).unwrap();
+        drain
+            .process_line("alpha beta charlie delta".to_string())
+            .unwrap();
+        drain
+            .process_line("alpha beta gamma epsilon".to_string())
+            .unwrap();
+        drain
+            .process_line("alpha beta zeta eta".to_string())
+            .unwrap();
         drain = create_test_drain(0.5, 1);
-        drain.process_line("unique1 common_field value1".to_string()).unwrap();
-        drain.process_line("unique2 common_field valueA".to_string()).unwrap();
-        drain.process_line("unique2 common_field valueB".to_string()).unwrap();
-        let _c2_original_id = drain.clusters.iter().find(|c| c.log_template[0] == TokenOrWildcard::Token("unique2".to_string())).unwrap().cluster_id;
-        drain.process_line("unique1 different_field valX".to_string()).unwrap();
-        let _c1_generalized_template = vec![ TokenOrWildcard::Token("unique1".to_string()), TokenOrWildcard::Wildcard, TokenOrWildcard::Wildcard];
-        assert_template_equals(drain.clusters.iter().find(|c| {c.count == 2 && c.log_template[0] == TokenOrWildcard::Token("unique1".to_string())}).unwrap().log_template.as_slice(), &["unique1", "*", "*"]);
+        drain
+            .process_line("unique1 common_field value1".to_string())
+            .unwrap();
+        drain
+            .process_line("unique2 common_field valueA".to_string())
+            .unwrap();
+        drain
+            .process_line("unique2 common_field valueB".to_string())
+            .unwrap();
+        let _c2_original_id = drain
+            .clusters
+            .iter()
+            .find(|c| c.log_template[0] == TokenOrWildcard::Token("unique2".to_string()))
+            .unwrap()
+            .cluster_id;
+        drain
+            .process_line("unique1 different_field valX".to_string())
+            .unwrap();
+        let _c1_generalized_template = vec![
+            TokenOrWildcard::Token("unique1".to_string()),
+            TokenOrWildcard::Wildcard,
+            TokenOrWildcard::Wildcard,
+        ];
+        assert_template_equals(
+            drain
+                .clusters
+                .iter()
+                .find(|c| {
+                    c.count == 2
+                        && c.log_template[0] == TokenOrWildcard::Token("unique1".to_string())
+                })
+                .unwrap()
+                .log_template
+                .as_slice(),
+            &["unique1", "*", "*"],
+        );
     }
 
     #[test]
@@ -671,26 +812,70 @@ mod tests {
         drain.process_line("A D C".to_string()).unwrap();
         let c1_id = drain.clusters[0].cluster_id;
         drain.process_line("X Y Z".to_string()).unwrap();
-        let _c2_id = drain.clusters.iter().find(|c| c.cluster_id != c1_id).unwrap().cluster_id;
+        let _c2_id = drain
+            .clusters
+            .iter()
+            .find(|c| c.cluster_id != c1_id)
+            .unwrap()
+            .cluster_id;
         drain = create_test_drain(0.4, 1);
         drain.process_line("common_prefix A B".to_string()).unwrap();
         drain.process_line("common_prefix A C".to_string()).unwrap();
         let _c1_id = drain.clusters[0].cluster_id;
         drain.process_line("common_prefix X Y".to_string()).unwrap();
         drain = create_test_drain(0.5, 1);
-        drain.process_line("prefix val1 suffix_A".to_string()).unwrap();
-        drain.process_line("prefix valX suffix_B".to_string()).unwrap();
-        drain.process_line("prefix valY suffix_B".to_string()).unwrap();
-        let _c_b_id = drain.clusters.iter().find(|c| {c.samples.iter().any(|s| {s.tokens[1] == TokenOrWildcard::Wildcard.to_string()|| s.tokens[1] == "valX"|| s.tokens[1] == "valY"})}).unwrap().cluster_id;
-        drain.process_line("prefix val2 suffix_A".to_string()).unwrap();
-        drain.process_line("prefix val3 suffix_DIFFERENT".to_string()).unwrap();
+        drain
+            .process_line("prefix val1 suffix_A".to_string())
+            .unwrap();
+        drain
+            .process_line("prefix valX suffix_B".to_string())
+            .unwrap();
+        drain
+            .process_line("prefix valY suffix_B".to_string())
+            .unwrap();
+        let _c_b_id = drain
+            .clusters
+            .iter()
+            .find(|c| {
+                c.samples.iter().any(|s| {
+                    s.tokens[1] == TokenOrWildcard::Wildcard.to_string()
+                        || s.tokens[1] == "valX"
+                        || s.tokens[1] == "valY"
+                })
+            })
+            .unwrap()
+            .cluster_id;
+        drain
+            .process_line("prefix val2 suffix_A".to_string())
+            .unwrap();
+        drain
+            .process_line("prefix val3 suffix_DIFFERENT".to_string())
+            .unwrap();
         let c_a_final = drain.clusters.iter().find(|c| c.count == 3).unwrap();
         assert_template_equals(&c_a_final.log_template, &["prefix", "*", "*"]);
-        assert_eq!(drain.clusters.len(),2,"Number of clusters should remain 2 if no pull happened");
-        let c1_final_idx = drain.clusters.iter().position(|c| c.log_template[0] == TokenOrWildcard::Token("unique1".to_string())).unwrap(); // This will panic, unique1 is not in any template here
-        let c2_final_idx = drain.clusters.iter().position(|c| c.log_template[0] == TokenOrWildcard::Token("unique2".to_string())).unwrap(); // This will panic
-        assert_eq!(drain.clusters[c1_final_idx].count, 2,"C1 count should be 2 (L_A1, L_A3)");
-        assert_eq!(drain.clusters[c2_final_idx].count, 2,"C2 count should be 2 (L_B1, L_B2) - no pull");
+        assert_eq!(
+            drain.clusters.len(),
+            2,
+            "Number of clusters should remain 2 if no pull happened"
+        );
+        let c1_final_idx = drain
+            .clusters
+            .iter()
+            .position(|c| c.log_template[0] == TokenOrWildcard::Token("unique1".to_string()))
+            .unwrap(); // This will panic, unique1 is not in any template here
+        let c2_final_idx = drain
+            .clusters
+            .iter()
+            .position(|c| c.log_template[0] == TokenOrWildcard::Token("unique2".to_string()))
+            .unwrap(); // This will panic
+        assert_eq!(
+            drain.clusters[c1_final_idx].count, 2,
+            "C1 count should be 2 (L_A1, L_A3)"
+        );
+        assert_eq!(
+            drain.clusters[c2_final_idx].count, 2,
+            "C2 count should be 2 (L_B1, L_B2) - no pull"
+        );
     }
 
     #[test]
@@ -701,12 +886,27 @@ mod tests {
         let c1_id = drain.clusters[0].cluster_id;
         let line_c_str = "Event C P2 Z".to_string();
         drain.process_line(line_c_str.clone()).unwrap();
-        let c2_idx = drain.clusters.iter().position(|c| c.cluster_id != c1_id).unwrap();
+        let c2_idx = drain
+            .clusters
+            .iter()
+            .position(|c| c.cluster_id != c1_id)
+            .unwrap();
         let line_d_str = "Event C P2 W".to_string();
         drain.process_line(line_d_str.clone()).unwrap();
-        assert_eq!(drain.clusters.len(), 2, "C2 should generalize, still 2 clusters"); // This was the failing assertion (expected 2, got 3)
-        assert_template_equals(&drain.clusters[c2_idx].log_template, &["Event", "C", "P2", "*"]);
-        let c1_idx = drain.clusters.iter().position(|c| c.cluster_id == c1_id).unwrap();
+        assert_eq!(
+            drain.clusters.len(),
+            2,
+            "C2 should generalize, still 2 clusters"
+        ); // This was the failing assertion (expected 2, got 3)
+        assert_template_equals(
+            &drain.clusters[c2_idx].log_template,
+            &["Event", "C", "P2", "*"],
+        );
+        let c1_idx = drain
+            .clusters
+            .iter()
+            .position(|c| c.cluster_id == c1_id)
+            .unwrap();
         assert_eq!(drain.clusters[c1_idx].count, 2); // Count of C1 before Line E
         let line_e_str = "Event D P1 V".to_string();
         drain.process_line(line_e_str.clone()).unwrap();
@@ -715,12 +915,27 @@ mod tests {
         let line_f_str = "Event X P_NEW Q_NEW".to_string();
         drain.process_line(line_f_str.clone()).unwrap();
         assert_eq!(drain.clusters.len(), 3, "Line F should form C3"); // Original assertion
-        let c3_idx = drain.clusters.iter().position(|c| {c.cluster_id != c1_id && c.cluster_id != drain.clusters[c2_idx].cluster_id}).unwrap();
-        assert_template_equals(&drain.clusters[c3_idx].log_template, &["Event", "X", "P_NEW", "Q_NEW"]);
+        let c3_idx = drain
+            .clusters
+            .iter()
+            .position(|c| {
+                c.cluster_id != c1_id && c.cluster_id != drain.clusters[c2_idx].cluster_id
+            })
+            .unwrap();
+        assert_template_equals(
+            &drain.clusters[c3_idx].log_template,
+            &["Event", "X", "P_NEW", "Q_NEW"],
+        );
         assert_eq!(drain.clusters[c3_idx].count, 1);
-        assert_template_equals(&drain.clusters[c1_idx].log_template, &["Event", "*", "P1", "*"]);
+        assert_template_equals(
+            &drain.clusters[c1_idx].log_template,
+            &["Event", "*", "P1", "*"],
+        );
         assert_eq!(drain.clusters[c1_idx].count, 3);
-        assert_template_equals(&drain.clusters[c2_idx].log_template, &["Event", "C", "P2", "*"]);
+        assert_template_equals(
+            &drain.clusters[c2_idx].log_template,
+            &["Event", "C", "P2", "*"],
+        );
         assert_eq!(drain.clusters[c2_idx].count, 2);
     }
 
@@ -734,10 +949,24 @@ mod tests {
         assert_template_equals(&drain.clusters[0].log_template, &["Event", "*", "P1", "*"]);
         let line_f_str = "Event X P_NEW Q_NEW".to_string();
         let result_f = drain.process_line(line_f_str.clone()).unwrap();
-        assert_eq!(drain.clusters.len(), 2, "Line F should form a new cluster C2");
-        assert_eq!(result_f, true, "process_line for Line F should return true (new cluster)");
+        assert_eq!(
+            drain.clusters.len(),
+            2,
+            "Line F should form a new cluster C2"
+        );
+        assert_eq!(
+            result_f, true,
+            "process_line for Line F should return true (new cluster)"
+        );
         assert_template_equals(&drain.clusters[0].log_template, &["Event", "*", "P1", "*"]);
-        let c2_idx = drain.clusters.iter().position(|c| c.count == 1 && c.cluster_id != drain.clusters[0].cluster_id).unwrap();
-        assert_template_equals(&drain.clusters[c2_idx].log_template, &["Event", "X", "P_NEW", "Q_NEW"]);
+        let c2_idx = drain
+            .clusters
+            .iter()
+            .position(|c| c.count == 1 && c.cluster_id != drain.clusters[0].cluster_id)
+            .unwrap();
+        assert_template_equals(
+            &drain.clusters[c2_idx].log_template,
+            &["Event", "X", "P_NEW", "Q_NEW"],
+        );
     }
 }
