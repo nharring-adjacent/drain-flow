@@ -118,21 +118,56 @@ impl Drain for DifferentialDrain {
         };
 
         let mut best_match_cluster_index: Option<usize> = None;
-        let mut max_similarity = 0.0;
+        let mut max_similarity_score = -1.0_f32;
+        // Initialize with 0, as concrete tokens count cannot be negative.
+        // Or usize::MIN if that's preferred for counts.
+        let mut max_concrete_tokens_after_gen_for_best_match = 0;
 
         // Find Best Matching Cluster
         for (index, cluster) in self.clusters.iter().enumerate() {
-            // Length Check (Simplified: templates must have same length as message)
             if processed_message.tokens.len() != cluster.log_template.len() {
                 continue;
             }
 
-            let similarity =
-                Self::calculate_similarity(&processed_message.tokens, &cluster.log_template);
+            let similarity = Self::calculate_similarity(&processed_message.tokens, &cluster.log_template);
 
-            if similarity > max_similarity && similarity >= self.similarity_threshold {
-                max_similarity = similarity;
-                best_match_cluster_index = Some(index);
+            if similarity >= self.similarity_threshold {
+                // This cluster is a potential candidate.
+                // Let's determine what its template would look like if it absorbed this message.
+                let mut temp_template = cluster.log_template.clone();
+                // Variable to track if any change was made to temp_template for accurate concrete count
+                // let mut _changed_for_concrete_count = false; // Not strictly needed for this logic
+                for (i, item) in temp_template.iter_mut().enumerate() {
+                    if let TokenOrWildcard::Token(template_token_val) = item {
+                        if template_token_val != &processed_message.tokens[i] {
+                            *item = TokenOrWildcard::Wildcard;
+                            // _changed_for_concrete_count = true; // Not used
+                        }
+                    }
+                }
+                let current_concrete_count_after_gen = temp_template
+                    .iter()
+                    .filter(|t| matches!(t, TokenOrWildcard::Token(_)))
+                    .count();
+
+                // Only consider this cluster if its generalized template meets the depth requirement.
+                if current_concrete_count_after_gen >= self.max_depth {
+                    if similarity > max_similarity_score {
+                        // This candidate has a higher similarity score than any previous best.
+                        max_similarity_score = similarity;
+                        max_concrete_tokens_after_gen_for_best_match = current_concrete_count_after_gen;
+                        best_match_cluster_index = Some(index);
+                    } else if similarity == max_similarity_score {
+                        // Similarity is the same as the current best.
+                        // Tie-break by choosing the one that results in a more specific template (more concrete tokens).
+                        if current_concrete_count_after_gen > max_concrete_tokens_after_gen_for_best_match {
+                            max_concrete_tokens_after_gen_for_best_match = current_concrete_count_after_gen;
+                            best_match_cluster_index = Some(index);
+                        }
+                        // If concrete token counts are also equal, the one with the lower index (found first) is kept.
+                        // This ensures determinism.
+                    }
+                }
             }
         }
 
@@ -850,28 +885,16 @@ mod tests {
             .unwrap();
         let c_a_final = drain.clusters.iter().find(|c| c.count == 3).unwrap();
         assert_template_equals(&c_a_final.log_template, &["prefix", "*", "*"]);
-        assert_eq!(
-            drain.clusters.len(),
-            2,
-            "Number of clusters should remain 2 if no pull happened"
-        );
-        let c1_final_idx = drain
-            .clusters
+        // Assert properties of the second cluster (Cluster B)
+        let c_b_final = drain.clusters
             .iter()
-            .position(|c| c.log_template[0] == TokenOrWildcard::Token("unique1".to_string()))
-            .unwrap(); // This will panic, unique1 is not in any template here
-        let c2_final_idx = drain
-            .clusters
-            .iter()
-            .position(|c| c.log_template[0] == TokenOrWildcard::Token("unique2".to_string()))
-            .unwrap(); // This will panic
-        assert_eq!(
-            drain.clusters[c1_final_idx].count, 2,
-            "C1 count should be 2 (L_A1, L_A3)"
-        );
-        assert_eq!(
-            drain.clusters[c2_final_idx].count, 2,
-            "C2 count should be 2 (L_B1, L_B2) - no pull"
+            .find(|c| c.cluster_id != c_a_final.cluster_id)
+            .expect("Failed to find the second cluster (Cluster B)");
+
+        assert_eq!(c_b_final.count, 2, "Expected Cluster B to have count 2");
+        assert_template_equals(
+            &c_b_final.log_template,
+            &["prefix", "*", "suffix_B"],
         );
     }
 
