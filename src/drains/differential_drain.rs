@@ -240,56 +240,7 @@ impl DifferentialDrain {
 // Delayed Removal with Verification, Audit Trail for Count Changes) offer more robust
 // alternatives. The choice of strategy depends on the specific requirements and acceptable
 // trade-offs in terms of performance, memory, and implementation complexity.
-//
-// ## Async Usage and Error Handling Context
-//
-// As of the current review, the `DifferentialDrain` and its core methods
-// (e.g., `process_line`, `collect_log_groups`) operate entirely within a
-// synchronous context. The codebase does not currently utilize asynchronous
-// programming constructs (such as `async`, `await`, `Future`, or async runtimes
-// like Tokio or async-std) in relation to the direct operation or invocation
-// of `DifferentialDrain`.
-//
-// ### Error Handling
-//
-// The primary error handling mechanism employed by `DifferentialDrain` methods,
-// such as `process_line`, is the standard Rust `Result<T, E>` type. Specifically,
-// `Result<bool, anyhow::Error>` is used for `process_line`.
-//
-// *   **`anyhow::Error`**: This choice allows for flexible error handling, where
-//     functions can return any error type that implements `std.error::Error`,
-//     and `anyhow` will wrap it. This is convenient for converting various error
-//     types into a single, consistent error type for the function's signature.
-//     It typically includes a backtrace if captured (e.g. by setting `RUST_BACKTRACE=1`).
-//
-// *   **Synchronous Propagation**: Errors are propagated synchronously up the call
-//     stack. The caller of `process_line` is responsible for handling the `Result`
-//     (e.g., via `match`, `?` operator in a function returning `Result`, or `unwrap`/`expect`
-//     if an error is considered fatal for that specific path).
-//
-// ### Debuggability
-//
-// *   **Tracing**: The existing `tracing` logs (info!, debug!, trace!, etc.) within
-//     `DifferentialDrain` are the primary tools for debugging its execution flow
-//     and state changes.
-// *   **Error Context**: While `anyhow::Error` provides a backtrace, specific error
-//     context (beyond what the original error type provides) might need to be added
-//     using `anyhow::Context` or by creating custom error types if more granular
-//     error information is frequently needed for debugging. However, for most internal
-//     operations within `DifferentialDrain`, the current direct error returns or panics
-//     (in case of unrecoverable logic errors like Regex compilation failure in `tokenize_line`)
-//     are standard for synchronous Rust.
-//
-// ### Conclusion on Async
-//
-// Complexities within `DifferentialDrain` primarily stem from its stateful nature,
-// the algorithmic intricacies of log clustering (similarity calculations, template
-// generalization, cluster re-evaluation, etc.), and memory management, rather
-// than from asynchronous programming paradigms. If `DifferentialDrain` were to be
-// integrated into a larger asynchronous system (e.g., processing logs from an
-// async stream), the calling code would be responsible for managing the async
-// aspects, and `DifferentialDrain` itself would likely remain a synchronous component
-// called from within an async task or thread pool (like `tokio::task::spawn_blocking`).
+
 
 // 4. Implement `Drain` trait for `DifferentialDrain`:
 impl Drain for DifferentialDrain {
