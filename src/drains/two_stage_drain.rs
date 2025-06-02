@@ -178,6 +178,7 @@ pub struct TwoStageDrain {
 }
 
 impl TwoStageDrain {
+    #[allow(clippy::only_used_in_recursion)]
     fn find_candidate_log_groups(
         &self,
         current_node: &Node,
