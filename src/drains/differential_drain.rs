@@ -7,7 +7,7 @@ use anyhow::Error;
 use lazy_static::lazy_static; // Added
 use regex::Regex; // Added
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, info, trace, warn};
 use uuid::Uuid;
 // Potentially need to add `use string_interner::DefaultSymbol;` if we use it for tokens directly in ProcessedLogMessage
 // For now, let's assume tokens are Strings or a similar type that doesn't require DefaultSymbol directly in struct defs yet.
@@ -19,18 +19,6 @@ impl fmt::Display for TokenOrWildcard {
         match self {
             TokenOrWildcard::Token(s) => write!(f, "{}", s),
             TokenOrWildcard::Wildcard => write!(f, "*"),
-        }
-    }
-
-    /// Dumps all clusters into a pretty-printed JSON string for debugging.
-    pub fn debug_dump_clusters(&self) -> String {
-        match serde_json::to_string_pretty(&self.clusters) {
-            Ok(json_str) => json_str,
-            Err(e) => {
-                // In case of error, return a string indicating the failure.
-                // Consider logging the error as well if a logger is available here.
-                format!("Error serializing clusters to JSON: {}", e)
-            }
         }
     }
 }
@@ -116,6 +104,18 @@ impl DifferentialDrain {
             // max_depth here acts as a minimum number of concrete (non-wildcard) tokens
             // a template must have after generalization.
             max_depth,
+        }
+    }
+
+    /// Dumps all clusters into a pretty-printed JSON string for debugging.
+    pub fn debug_dump_clusters(&self) -> String {
+        match serde_json::to_string_pretty(&self.clusters) {
+            Ok(json_str) => json_str,
+            Err(e) => {
+                // In case of error, return a string indicating the failure.
+                // Consider logging the error as well if a logger is available here.
+                format!("Error serializing clusters to JSON: {}", e)
+            }
         }
     }
 }
