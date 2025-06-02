@@ -386,8 +386,8 @@ impl Drain for DifferentialDrain {
 
             // Generalize Template
             let mut new_template = cluster.log_template.clone(); // This is actually the old template before generalization for this step
-            // let mut _concrete_tokens_count = 0; // Prefixed with underscore - confirmed unused
-            // let mut _wildcards_introduced_this_step = 0; // Prefixed with underscore - confirmed unused
+                                                                 // let mut _concrete_tokens_count = 0; // Prefixed with underscore - confirmed unused
+                                                                 // let mut _wildcards_introduced_this_step = 0; // Prefixed with underscore - confirmed unused
 
             for (i, item) in new_template.iter_mut().enumerate() {
                 if let TokenOrWildcard::Token(template_token_val) = item {
@@ -424,7 +424,8 @@ impl Drain for DifferentialDrain {
                 // --- Start of Re-evaluation Logic ---
                 let updated_cluster_index = cluster_idx;
                 let generalized_template_of_updated_cluster = new_template; // This is the new_template of the updated_cluster_index cluster
-                let updated_cluster_id_str = self.clusters[updated_cluster_index].cluster_id.to_string();
+                let updated_cluster_id_str =
+                    self.clusters[updated_cluster_index].cluster_id.to_string();
                 debug!(target: "differential_drain", "Starting re-evaluation for updated cluster ID: {}, new template: {:?}", updated_cluster_id_str, generalized_template_of_updated_cluster);
 
                 // Reallocation Logic:
@@ -450,12 +451,15 @@ impl Drain for DifferentialDrain {
                         self.clusters[other_cluster_idx].samples.iter().enumerate()
                     {
                         trace!(target: "differential_drain", "Re-eval: Evaluating sample (original ID: {}) from cluster ID {}", msg_sample.original_message_id.to_string(), other_cluster_id_str);
-                        if msg_sample.tokens.len() != generalized_template_of_updated_cluster.len() {
+                        if msg_sample.tokens.len() != generalized_template_of_updated_cluster.len()
+                        {
                             trace!(target: "differential_drain", "Re-eval: Sample original ID {} in cluster {} token length ({}) mismatch with generalized_template_of_updated_cluster length ({}). Skipping.", msg_sample.original_message_id.to_string(), other_cluster_id_str, msg_sample.tokens.len(), generalized_template_of_updated_cluster.len());
                             continue;
                         }
-                        let similarity_to_generalized_updated_template =
-                            Self::calculate_similarity(&msg_sample.tokens, &generalized_template_of_updated_cluster);
+                        let similarity_to_generalized_updated_template = Self::calculate_similarity(
+                            &msg_sample.tokens,
+                            &generalized_template_of_updated_cluster,
+                        );
 
                         if msg_sample.tokens.len() != other_cluster_template.len() {
                             // This case should ideally not happen if samples are consistent with their cluster templates
@@ -472,7 +476,8 @@ impl Drain for DifferentialDrain {
                         // 1. Above the general `similarity_threshold`.
                         // 2. Strictly greater than its similarity to its current cluster's template.
                         if similarity_to_generalized_updated_template >= self.similarity_threshold
-                            && similarity_to_generalized_updated_template > similarity_to_own_template
+                            && similarity_to_generalized_updated_template
+                                > similarity_to_own_template
                         {
                             debug!(target: "differential_drain", "Re-eval: Marking sample (original ID: {}) to move from cluster {} to cluster {}", msg_sample.original_message_id.to_string(), other_cluster_id_str, updated_cluster_id_str);
                             sample_indices_to_move_from_other.push(sample_idx);
@@ -485,7 +490,11 @@ impl Drain for DifferentialDrain {
                     if !sample_indices_to_move_from_other.is_empty() {
                         sample_indices_to_move_from_other.sort_unstable_by(|a, b| b.cmp(a)); // Sort descending to remove from end
                         for sample_idx in sample_indices_to_move_from_other {
-                            moves_to_perform.push((other_cluster_idx, sample_idx, updated_cluster_index));
+                            moves_to_perform.push((
+                                other_cluster_idx,
+                                sample_idx,
+                                updated_cluster_index,
+                            ));
                         }
                     }
                 }
@@ -505,7 +514,9 @@ impl Drain for DifferentialDrain {
 
                         // It's safer to log details of the message *before* it's removed if possible,
                         // or ensure that `remove` returns the item. `Vec::remove` does return the item.
-                        let msg_to_move = self.clusters[from_idx].samples.remove(sample_idx_in_from_cluster);
+                        let msg_to_move = self.clusters[from_idx]
+                            .samples
+                            .remove(sample_idx_in_from_cluster);
                         debug!(target: "differential_drain", "Re-eval: Moving sample (original ID: {}) from cluster {} to cluster {}", msg_to_move.original_message_id.to_string(), from_cluster_id_str, to_cluster_id_str);
 
                         self.clusters[from_idx].count -= 1;
