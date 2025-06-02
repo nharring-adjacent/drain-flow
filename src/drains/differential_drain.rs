@@ -241,7 +241,6 @@ impl DifferentialDrain {
 // alternatives. The choice of strategy depends on the specific requirements and acceptable
 // trade-offs in terms of performance, memory, and implementation complexity.
 
-
 // 4. Implement `Drain` trait for `DifferentialDrain`:
 impl Drain for DifferentialDrain {
     // **a. `process_line(&mut self, line: String) -> Result<bool, anyhow::Error>`:**
@@ -980,128 +979,132 @@ mod tests {
     #[test]
     fn test_log_line_reassignment_pulls_from_other_cluster() {
         // Increase similarity threshold to ensure the first two distinct lines form separate clusters
-        let mut drain = create_test_drain(0.9, 1); 
+        let mut drain = create_test_drain(0.9, 1);
         let line1 = "Completely different line one".to_string(); // Made very different
         let _line2 = "Another totally unique line two with more tokens".to_string(); // Made very different and different length
         drain.process_line(line1.clone()).unwrap();
         drain.process_line(_line2.clone()).unwrap();
-        assert_eq!(drain.clusters.len(), 2, "Ensuring two clusters are formed by very different lines");
-        let _original_c2_id = drain.clusters[1].cluster_id; // This is line 1025, the point of panic.
-        // All subsequent code in this test is commented out to isolate this initial part.
-        /*
-        let line3 = "Specific message typeA valueZ".to_string();
-        drain.process_line(line3.clone()).unwrap();
-        let _line4 = "Specific message typeNEW valCommon".to_string();
-        drain.process_line(_line4.clone()).unwrap();
-        let mut drain_pull = create_test_drain(0.5, 1);
-        let line_a = "common token1 uniqueA val1".to_string();
-        drain_pull.process_line(line_a.clone()).unwrap();
-        drain_pull.similarity_threshold = 0.6;
-        let line_b = "common token1 uniqueB val2".to_string();
-        drain_pull.process_line(line_b.clone()).unwrap();
-        assert_eq!(drain_pull.clusters.len(), 2, "Two clusters initially");
-        let line_c = "common token1 uniqueA val3".to_string();
-        drain_pull.process_line(line_c.clone()).unwrap();
-        assert_eq!(drain_pull.clusters.len(), 2, "Still 2 clusters after C");
-        let ca_idx = drain_pull
-            .clusters
-            .iter()
-            .position(|c| c.count == 2)
-            .unwrap();
-        let _cb_idx = drain_pull
-            .clusters
-            .iter()
-            .position(|c| c.count == 1)
-            .unwrap();
-        assert_template_equals(
-            &drain_pull.clusters[ca_idx].log_template,
-            &["common", "token1", "uniqueA", "*"],
-        );
-        let mut drain_force_pull = create_test_drain(0.5, 1);
-        drain_force_pull
-            .process_line("A B C D".to_string())
-            .unwrap();
-        drain_force_pull
-            .process_line("X Y C D".to_string())
-            .unwrap();
-        let _c2_id = drain_force_pull.clusters[1].cluster_id;
-        drain_force_pull
-            .process_line("A B E F".to_string())
-            .unwrap();
-        drain = create_test_drain(0.5, 1);
-        drain
-            .process_line("msg typeA detailX common1".to_string())
-            .unwrap();
-        drain
-            .process_line("msg typeA detailY common2".to_string())
-            .unwrap();
-        drain
-            .process_line("msg typeB detailP common3".to_string())
-            .unwrap();
-        let _c2_idx = drain.clusters.iter().position(|c| c.count == 1).unwrap();
-        drain
-            .process_line("msg typeB detailQ common4".to_string())
-            .unwrap();
-        drain
-            .process_line("msg general detailZ common5".to_string())
-            .unwrap();
-        let c2_final_idx = drain
-            .clusters
-            .iter()
-            .position(|c| c.log_template[1] == TokenOrWildcard::Token("typeB".to_string()))
-            .unwrap();
         assert_eq!(
-            drain.clusters[c2_final_idx].count, 2,
-            "C2 count should remain 2 if no pull occurs"
+            drain.clusters.len(),
+            2,
+            "Ensuring two clusters are formed by very different lines"
         );
-        drain = create_test_drain(0.5, 1);
-        drain
-            .process_line("alpha beta charlie delta".to_string())
-            .unwrap();
-        drain
-            .process_line("alpha beta gamma epsilon".to_string())
-            .unwrap();
-        drain
-            .process_line("alpha beta zeta eta".to_string())
-            .unwrap();
-        drain = create_test_drain(0.5, 1);
-        drain
-            .process_line("unique1 common_field value1".to_string())
-            .unwrap();
-        drain
-            .process_line("unique2 common_field valueA".to_string())
-            .unwrap();
-        drain
-            .process_line("unique2 common_field valueB".to_string())
-            .unwrap();
-        let _c2_original_id = drain
-            .clusters
-            .iter()
-            .find(|c| c.log_template[0] == TokenOrWildcard::Token("unique2".to_string()))
-            .unwrap()
-            .cluster_id;
-        drain
-            .process_line("unique1 different_field valX".to_string())
-            .unwrap();
-        let _c1_generalized_template = [
-            TokenOrWildcard::Token("unique1".to_string()),
-            TokenOrWildcard::Wildcard,
-            TokenOrWildcard::Wildcard,
-        ];
-        assert_template_equals(
-            drain
-                .clusters
-                .iter()
-                .find(|c| {
-                    c.count == 2
-                        && c.log_template[0] == TokenOrWildcard::Token("unique1".to_string())
-                })
-                .unwrap()
-                .log_template
-                .as_slice(),
-            &["unique1", "*", "*"],
-        );
-        */
+        let _original_c2_id = drain.clusters[1].cluster_id; // This is line 1025, the point of panic.
+                                                            // All subsequent code in this test is commented out to isolate this initial part.
+                                                            /*
+                                                            let line3 = "Specific message typeA valueZ".to_string();
+                                                            drain.process_line(line3.clone()).unwrap();
+                                                            let _line4 = "Specific message typeNEW valCommon".to_string();
+                                                            drain.process_line(_line4.clone()).unwrap();
+                                                            let mut drain_pull = create_test_drain(0.5, 1);
+                                                            let line_a = "common token1 uniqueA val1".to_string();
+                                                            drain_pull.process_line(line_a.clone()).unwrap();
+                                                            drain_pull.similarity_threshold = 0.6;
+                                                            let line_b = "common token1 uniqueB val2".to_string();
+                                                            drain_pull.process_line(line_b.clone()).unwrap();
+                                                            assert_eq!(drain_pull.clusters.len(), 2, "Two clusters initially");
+                                                            let line_c = "common token1 uniqueA val3".to_string();
+                                                            drain_pull.process_line(line_c.clone()).unwrap();
+                                                            assert_eq!(drain_pull.clusters.len(), 2, "Still 2 clusters after C");
+                                                            let ca_idx = drain_pull
+                                                                .clusters
+                                                                .iter()
+                                                                .position(|c| c.count == 2)
+                                                                .unwrap();
+                                                            let _cb_idx = drain_pull
+                                                                .clusters
+                                                                .iter()
+                                                                .position(|c| c.count == 1)
+                                                                .unwrap();
+                                                            assert_template_equals(
+                                                                &drain_pull.clusters[ca_idx].log_template,
+                                                                &["common", "token1", "uniqueA", "*"],
+                                                            );
+                                                            let mut drain_force_pull = create_test_drain(0.5, 1);
+                                                            drain_force_pull
+                                                                .process_line("A B C D".to_string())
+                                                                .unwrap();
+                                                            drain_force_pull
+                                                                .process_line("X Y C D".to_string())
+                                                                .unwrap();
+                                                            let _c2_id = drain_force_pull.clusters[1].cluster_id;
+                                                            drain_force_pull
+                                                                .process_line("A B E F".to_string())
+                                                                .unwrap();
+                                                            drain = create_test_drain(0.5, 1);
+                                                            drain
+                                                                .process_line("msg typeA detailX common1".to_string())
+                                                                .unwrap();
+                                                            drain
+                                                                .process_line("msg typeA detailY common2".to_string())
+                                                                .unwrap();
+                                                            drain
+                                                                .process_line("msg typeB detailP common3".to_string())
+                                                                .unwrap();
+                                                            let _c2_idx = drain.clusters.iter().position(|c| c.count == 1).unwrap();
+                                                            drain
+                                                                .process_line("msg typeB detailQ common4".to_string())
+                                                                .unwrap();
+                                                            drain
+                                                                .process_line("msg general detailZ common5".to_string())
+                                                                .unwrap();
+                                                            let c2_final_idx = drain
+                                                                .clusters
+                                                                .iter()
+                                                                .position(|c| c.log_template[1] == TokenOrWildcard::Token("typeB".to_string()))
+                                                                .unwrap();
+                                                            assert_eq!(
+                                                                drain.clusters[c2_final_idx].count, 2,
+                                                                "C2 count should remain 2 if no pull occurs"
+                                                            );
+                                                            drain = create_test_drain(0.5, 1);
+                                                            drain
+                                                                .process_line("alpha beta charlie delta".to_string())
+                                                                .unwrap();
+                                                            drain
+                                                                .process_line("alpha beta gamma epsilon".to_string())
+                                                                .unwrap();
+                                                            drain
+                                                                .process_line("alpha beta zeta eta".to_string())
+                                                                .unwrap();
+                                                            drain = create_test_drain(0.5, 1);
+                                                            drain
+                                                                .process_line("unique1 common_field value1".to_string())
+                                                                .unwrap();
+                                                            drain
+                                                                .process_line("unique2 common_field valueA".to_string())
+                                                                .unwrap();
+                                                            drain
+                                                                .process_line("unique2 common_field valueB".to_string())
+                                                                .unwrap();
+                                                            let _c2_original_id = drain
+                                                                .clusters
+                                                                .iter()
+                                                                .find(|c| c.log_template[0] == TokenOrWildcard::Token("unique2".to_string()))
+                                                                .unwrap()
+                                                                .cluster_id;
+                                                            drain
+                                                                .process_line("unique1 different_field valX".to_string())
+                                                                .unwrap();
+                                                            let _c1_generalized_template = [
+                                                                TokenOrWildcard::Token("unique1".to_string()),
+                                                                TokenOrWildcard::Wildcard,
+                                                                TokenOrWildcard::Wildcard,
+                                                            ];
+                                                            assert_template_equals(
+                                                                drain
+                                                                    .clusters
+                                                                    .iter()
+                                                                    .find(|c| {
+                                                                        c.count == 2
+                                                                            && c.log_template[0] == TokenOrWildcard::Token("unique1".to_string())
+                                                                    })
+                                                                    .unwrap()
+                                                                    .log_template
+                                                                    .as_slice(),
+                                                                &["unique1", "*", "*"],
+                                                            );
+                                                            */
     }
 
     #[test]
@@ -1313,7 +1316,7 @@ mod tests {
     #[test]
     fn test_process_line_len1_generalizes_to_wildcard_ok_with_max_depth_0() {
         // max_depth = 0 allows full generalization. Similarity must also allow the merge.
-        let mut drain = create_test_drain(0.0, 0); 
+        let mut drain = create_test_drain(0.0, 0);
         drain.process_line("tokA".to_string()).unwrap();
         drain.process_line("tokB".to_string()).unwrap();
         assert_eq!(drain.clusters.len(), 1);
