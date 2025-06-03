@@ -574,7 +574,8 @@ impl DifferentialDrain {
                 ([\w-]+) |
                 (\S)
             "#
-            ).unwrap();
+            )
+            .unwrap();
         }
         let tokens: Vec<String> = TOKEN_RE
             .find_iter(line)

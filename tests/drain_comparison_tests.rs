@@ -208,8 +208,10 @@ mod comparative_tests {
             // Use a HashMap to check for templates and counts regardless of order.
             // Note: get_template_string() is used, which relies on group.base_record().to_string().
             // LogGroup.len() returns examples.len().
-            let templates_and_counts: std::collections::HashMap<String, usize> = 
-                sl_groups.iter().map(|g| (get_template_string(g), g.len())).collect();
+            let templates_and_counts: std::collections::HashMap<String, usize> = sl_groups
+                .iter()
+                .map(|g| (get_template_string(g), g.len()))
+                .collect();
 
             let expected_template1 = "Service * request * status 200".to_string();
             let expected_count1 = 3; // Lines S1, S2, S3, S4 - adjusted based on observed behavior
