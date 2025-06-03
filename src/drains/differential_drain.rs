@@ -569,17 +569,18 @@ impl DifferentialDrain {
                 (\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b) |
                 ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}) |
                 (\b\d+\.\d+\b|\b\d+\b) |
+                (\b[\w-]+\.[\w-]+\b) |
                 ([=():\[\]{}<>]) |
                 ([\w-]+) |
                 (\S)
             "#
-            )
-            .unwrap();
+            ).unwrap();
         }
-        TOKEN_RE
+        let tokens: Vec<String> = TOKEN_RE
             .find_iter(line)
             .map(|mat| mat.as_str().to_string())
-            .collect()
+            .collect();
+        tokens
     }
 
     fn calculate_similarity(message_tokens: &[String], template_tokens: &[TokenOrWildcard]) -> f32 {
