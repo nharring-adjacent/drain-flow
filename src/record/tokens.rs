@@ -238,7 +238,7 @@ impl Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let out: String = match self {
-            Token::Wildcard => "*".to_string(),
+            Token::Wildcard => INTERNER.read().resolve(*ASTERISK).unwrap_or("<*>").to_string(),
             Token::TypedMatch(t) => t.to_string(),
             Token::Value(v) => match v {
                 TypedToken::String(sym) => INTERNER
