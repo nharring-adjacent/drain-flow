@@ -1,4 +1,3 @@
-use chrono;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use drain_flow::intern_benchmark_harness::{
     BucketBackendInterner, BufferBackendInterner, NoInterningBaseline, SharedStringInterner,
