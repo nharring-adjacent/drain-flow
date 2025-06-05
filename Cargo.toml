@@ -33,8 +33,10 @@ timely = "0.12"
 chrono = "0.4"
 criterion = {version = "0.5.1", features = ["html_reports"]}
 proptest = "1.0.0"
-rand = "0.9.0"
+rand = "0.9.0" # Reverted to original version
 serde = "1.0.144"
+regex = "1" # Version specified in prompt
+lazy_static = "1.4" # Version specified in prompt
 serde_derive = "1.0.144"
 tracing-test = "0.2.3"
 tinytemplate = "1.2.1"
@@ -58,4 +60,8 @@ harness = false
 
 [[bench]]
 name = "query_benchmarks"
+harness = false
+
+[[bench]]
+name = "string_interning_benchmark"
 harness = false
