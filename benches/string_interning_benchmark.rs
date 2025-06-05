@@ -1,11 +1,29 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use drain_flow::intern_benchmark_harness::{StringInternerTrait, SharedStringInterner, NoInterningBaseline};
+use drain_flow::intern_benchmark_harness::{
+    StringInternerTrait, SharedStringInterner, NoInterningBaseline,
+    StringBackendInterner, BucketBackendInterner, BufferBackendInterner
+};
 use std::collections::HashSet;
 use rand::{Rng, SeedableRng}; // Add rand for data generation
 use rand::rngs::StdRng;      // Add this for a deterministic RNG
 use lazy_static::lazy_static; // Add this
 use regex::Regex;             // Add this
 use chrono; // For Utc::now()
+
+/*
+Benchmark Notes for String Interning Strategies (Typical Results for this Workload):
+- All interning strategies significantly outperform the `NoInterningBaseline` (String::clone).
+- The `SharedStringInterner` (using the global BucketBackend) generally shows the best performance,
+  likely benefiting from being a warm, shared instance.
+- Among fresh interner instances:
+    - `BufferBackendInterner` tends to be the fastest.
+    - `StringBackendInterner` is slightly slower than BufferBackend.
+    - `BucketBackendInterner` is typically the slowest of the interning backends in this test,
+      though still much faster than no interning. Its specific strengths (e.g., 'static string
+      handling) are not the primary focus of this dynamic tokenization benchmark.
+- Performance variations are expected between runs due to system noise. The relative
+  rankings are the most important takeaway.
+*/
 
 fn get_log_lines() -> Vec<String> {
     let mut lines = Vec::new();
@@ -96,6 +114,27 @@ fn string_interning_benchmark(c: &mut Criterion) {
     group.bench_function(BenchmarkId::new("NoInterningBaseline", "String::clone"), |b| {
         b.iter_with_setup(
             || (NoInterningBaseline::new(), log_lines.clone()),
+            |(mut interner, lines)| intern_lines(&mut interner, &lines),
+        );
+    });
+
+    group.bench_function(BenchmarkId::new("StringBackendInterner", "fresh-string-backend"), |b| {
+        b.iter_with_setup(
+            || (StringBackendInterner::new(), log_lines.clone()),
+            |(mut interner, lines)| intern_lines(&mut interner, &lines),
+        );
+    });
+
+    group.bench_function(BenchmarkId::new("BucketBackendInterner", "bucket-backend"), |b| {
+        b.iter_with_setup(
+            || (BucketBackendInterner::new(), log_lines.clone()),
+            |(mut interner, lines)| intern_lines(&mut interner, &lines),
+        );
+    });
+
+    group.bench_function(BenchmarkId::new("BufferBackendInterner", "buffer-backend"), |b| {
+        b.iter_with_setup(
+            || (BufferBackendInterner::new(), log_lines.clone()),
             |(mut interner, lines)| intern_lines(&mut interner, &lines),
         );
     });

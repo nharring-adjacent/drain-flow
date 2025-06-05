@@ -35,6 +35,8 @@ use string_interner::DefaultSymbol;
 use std::sync::Arc;
 use parking_lot::RwLock;
 use string_interner::StringInterner;
+use string_interner::backend::{StringBackend, BucketBackend, BufferBackend}; // Import backends
+use std::collections::hash_map::RandomState; // Import RandomState
 
 /// An implementation of `StringInternerTrait` using the project's shared `string-interner`.
 pub struct SharedStringInterner {
@@ -178,5 +180,101 @@ impl StringInternerTrait for NoInterningBaseline {
         // The lifetime 'a is tied to the input 'a Self::Symbol, which is &'a String.
         // So returning &'a str (from &'a String) is valid.
         symbol.as_str()
+    }
+}
+
+// 1. StringBackendInterner (explicit, fresh instance)
+pub struct StringBackendInterner {
+    interner: StringInterner<StringBackend, RandomState>,
+}
+
+impl StringBackendInterner {
+    pub fn new() -> Self {
+        Self {
+            interner: StringInterner::<StringBackend, RandomState>::new(),
+        }
+    }
+}
+
+impl Default for StringBackendInterner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StringInternerTrait for StringBackendInterner {
+    type Symbol = DefaultSymbol;
+
+    fn intern(&mut self, s: &str) -> Self::Symbol {
+        self.interner.get_or_intern(s)
+    }
+
+    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
+        let resolved_str = self.interner.resolve(*symbol).expect("Symbol should exist in interner");
+        Box::leak(resolved_str.to_string().into_boxed_str())
+    }
+}
+
+// 2. BucketBackendInterner
+pub struct BucketBackendInterner {
+    interner: StringInterner<BucketBackend, RandomState>,
+}
+
+impl BucketBackendInterner {
+    pub fn new() -> Self {
+        Self {
+            interner: StringInterner::<BucketBackend, RandomState>::new(),
+        }
+    }
+}
+
+impl Default for BucketBackendInterner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StringInternerTrait for BucketBackendInterner {
+    type Symbol = DefaultSymbol;
+
+    fn intern(&mut self, s: &str) -> Self::Symbol {
+        self.interner.get_or_intern(s)
+    }
+
+    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
+        let resolved_str = self.interner.resolve(*symbol).expect("Symbol should exist in interner");
+        Box::leak(resolved_str.to_string().into_boxed_str())
+    }
+}
+
+// 3. BufferBackendInterner
+pub struct BufferBackendInterner {
+    interner: StringInterner<BufferBackend, RandomState>,
+}
+
+impl BufferBackendInterner {
+    pub fn new() -> Self {
+        Self {
+            interner: StringInterner::<BufferBackend, RandomState>::new(),
+        }
+    }
+}
+
+impl Default for BufferBackendInterner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StringInternerTrait for BufferBackendInterner {
+    type Symbol = DefaultSymbol;
+
+    fn intern(&mut self, s: &str) -> Self::Symbol {
+        self.interner.get_or_intern(s)
+    }
+
+    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
+        let resolved_str = self.interner.resolve(*symbol).expect("Symbol should exist in interner");
+        Box::leak(resolved_str.to_string().into_boxed_str())
     }
 }
