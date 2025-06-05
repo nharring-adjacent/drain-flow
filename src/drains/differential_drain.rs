@@ -49,6 +49,12 @@ pub enum TokenOrWildcard {
     // Potentially more specific wildcards, e.g., WildcardNumeric, WildcardAlphanum
 }
 
+impl TokenOrWildcard {
+    pub fn is_wildcard(&self) -> bool {
+        matches!(self, TokenOrWildcard::Wildcard)
+    }
+}
+
 /// Represents a DRAIN log cluster.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct LogCluster {

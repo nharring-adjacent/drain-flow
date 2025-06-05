@@ -51,7 +51,7 @@ pub fn benchmark_find_variables(c: &mut Criterion) {
     let lg = LogGroup::new(rec1);
     c.bench_function("find_variables", |b| {
         b.iter(|| {
-            lg.discover_variables(black_box(&rec2)).unwrap();
+            lg.discover_variable_indices(black_box(&rec2)).unwrap();
         });
     });
 }

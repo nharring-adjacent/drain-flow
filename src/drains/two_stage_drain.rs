@@ -21,7 +21,9 @@ use uuid::Uuid;
 use crate::drains::api::Drain;
 use crate::log_group::LogGroup;
 use crate::record::Record;
-// Removed: use crate::record::tokens::ASTERISK;
+use crate::record::tokens::{get_token_type, TokenType};
+use crate::log_group::is_parameter_similar;
+// Removed unused import: use crate::record::ASTERISK as RECORD_ASTERISK;
 
 // Use the shared interner from simple.rs
 use crate::drains::simple;
@@ -586,11 +588,9 @@ impl Drain for TwoStageDrain {
             }
         }
 
-        // Mutable Phase: Update existing group or create a new one
-        let root_node_for_length_mut = self
-            .tree
-            .entry(length)
-            .or_insert_with(Node::new_internal_node);
+        // Immutable Phase 1: Find candidate log groups and best match (already done above)
+
+        let mut group_found_and_updated = false;
 
         if let Some((best_path_to_leaf, best_group_id, best_score)) = best_match_info {
             let score_ratio = if length > 0 {
@@ -600,29 +600,75 @@ impl Drain for TwoStageDrain {
             };
 
             if score_ratio > local_threshold {
-                // Use best_path_to_leaf to get to the Vec<LogGroup>
-                let target_log_groups_vec = Self::get_or_create_log_group_mut(
-                    root_node_for_length_mut,
-                    &best_path_to_leaf,
-                    0, // Start depth from 0 for get_or_create_log_group_mut
-                    local_max_depth,
-                    local_max_children,
-                );
+                // Immutable Phase 2: Parameter Similarity Check (needs immutable self.tree)
+                let mut parameter_check_passed = true;
+                if let Some(current_root_node_for_length_immutable) = self.tree.get(&length) {
+                    let mut temp_path_node = current_root_node_for_length_immutable;
+                    let mut path_to_leaf_valid = true;
+                    for token_in_path in &best_path_to_leaf {
+                        if let NodeKind::Internal(children) = &temp_path_node.kind {
+                            if let Some(next_node) = children.get(token_in_path) {
+                                temp_path_node = next_node;
+                            } else {
+                                path_to_leaf_valid = false;
+                                break;
+                            }
+                        } else { // Should be internal if path continues
+                            path_to_leaf_valid = false;
+                            break;
+                        }
+                    }
 
-                if let Some(found_group) = target_log_groups_vec
-                    .iter_mut()
-                    .find(|g| g.id == best_group_id)
-                {
-                    found_group.add_example(new_record.clone()); // Clone new_record for this case
-                    return Ok(false); // Matched existing group
+                    if path_to_leaf_valid {
+                        if let NodeKind::Leaf(log_groups_in_leaf) = &temp_path_node.kind {
+                            if let Some(best_log_group_ref) = log_groups_in_leaf.iter().find(|lg| lg.id == best_group_id) {
+                                for (idx, token_tuple) in best_log_group_ref.event().inner.inner.iter().enumerate() {
+                                    let token_in_template = &token_tuple.1;
+                                    if token_in_template.is_wildcard() {
+                                        if idx < new_record.inner.inner.len() {
+                                            let new_token_value = &new_record.inner.inner[idx].1;
+                                            let new_token_str = match new_token_value {
+                                                crate::drains::differential_drain::TokenOrWildcard::Token(s) => s.as_str(),
+                                                crate::drains::differential_drain::TokenOrWildcard::Wildcard => "<*>",
+                                            };
+                                            let new_token_type = get_token_type(new_token_str);
+                                            let existing_types_at_wildcard_slot = best_log_group_ref.variables.get(&idx).map_or(&[][..], |v| v.as_slice());
+                                            if !is_parameter_similar(&new_token_type, existing_types_at_wildcard_slot) {
+                                                parameter_check_passed = false;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            } else { parameter_check_passed = false; }
+                        } else { parameter_check_passed = false; }
+                    } else { parameter_check_passed = false; }
+                } else { parameter_check_passed = false; }
+
+                if parameter_check_passed {
+                    // Mutable Phase: If all checks passed, now get mutable access and update the group
+                    let root_node_for_length_mut = self.tree.entry(length).or_insert_with(Node::new_internal_node);
+                    let target_log_groups_vec = Self::get_or_create_log_group_mut(
+                        root_node_for_length_mut,
+                        &best_path_to_leaf,
+                        0,
+                        local_max_depth,
+                        local_max_children,
+                    );
+                    if let Some(found_group) = target_log_groups_vec.iter_mut().find(|g| g.id == best_group_id) {
+                        found_group.add_example(new_record.clone());
+                        group_found_and_updated = true;
+                    }
                 }
-                // If the group with best_group_id is not found, it implies an inconsistency
-                // between find_candidate_log_groups/find_log_group_in_node_by_id and get_or_create_log_group_mut.
-                // Fall through to create a new group, though this indicates a potential issue.
             }
         }
 
-        // Create new group: No candidates, no root_node for length, or best match below threshold, or inconsistent state.
+        if group_found_and_updated {
+            return Ok(false); // Matched existing group and updated
+        }
+
+        // Create new group (if no match, below threshold, or param check failed)
+        let root_node_for_length_mut = self.tree.entry(length).or_insert_with(Node::new_internal_node);
         let log_groups_vec_for_new = Self::get_or_create_log_group_mut(
             root_node_for_length_mut,
             &processed_line_tokens, // Path for the new group is simply its own tokens

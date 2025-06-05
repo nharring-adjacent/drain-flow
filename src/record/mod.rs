@@ -17,8 +17,10 @@ use lazy_static::lazy_static;
 use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 use uuid::Uuid;
+// use chrono::Offset as ChronoOffset; // Removed unused import
 
-use self::tokens::{Offset, Token, TokenStream}; // Added Offset, removed TypedToken
+use self::tokens::{Offset, TokenStream}; // Use Offset and TokenStream from self::tokens
+use crate::drains::differential_drain::TokenOrWildcard as Token; // Using TokenOrWildcard as Token
 use crate::drains::simple::INTERNER;
 
 lazy_static! {
@@ -99,7 +101,16 @@ impl Record {
 
     #[instrument(level = "trace", skip(self))]
     pub fn first(&self) -> Option<DefaultSymbol> {
-        self.inner.first().map(std::convert::Into::into)
+        self.inner.first().map(|token_or_wildcard| {
+            match token_or_wildcard {
+                Token::Token(s) => { // Token is aliased to TokenOrWildcard
+                    INTERNER.write().get_or_intern(s.as_str())
+                }
+                Token::Wildcard => { // Token is aliased to TokenOrWildcard
+                    *ASTERISK // Use ASTERISK defined in this file (record/mod.rs)
+                }
+            }
+        })
     }
 
     #[instrument(level = "trace", skip(self))]
