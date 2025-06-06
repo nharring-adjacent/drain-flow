@@ -20,10 +20,22 @@ use regex::RegexSet;
 use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 
-pub use super::ASTERISK; // Made ASTERISK re-export public
-use crate::drains::simple::INTERNER;
+// Added imports for StringInternerTrait and the new static interner
+use crate::interner::StringInternerTrait;
+use std::sync::Arc;
+use parking_lot::RwLock;
+use string_interner::{StringInterner, backend::BucketBackend as StaticSymbolInternerBackend};
+
+// Removed: use crate::drains::simple::INTERNER;
 
 lazy_static! {
+    // New static interner for Grokker symbols and other path-internal uses
+    static ref STATIC_SYMBOL_INTERNER: Arc<RwLock<StringInterner<StaticSymbolInternerBackend>>> =
+        Arc::new(RwLock::new(StringInterner::<StaticSymbolInternerBackend>::new()));
+
+    // ASTERISK symbol defined locally using STATIC_SYMBOL_INTERNER
+    pub(crate) static ref ASTERISK: DefaultSymbol = STATIC_SYMBOL_INTERNER.write().get_or_intern_static("<*>");
+
     static ref MATCHERS: RegexSet = Grokker::build_pattern_set();
     static ref GROKKER_COUNT: usize = Grokker::iter_variants().count() - 1;
     static ref GROKKER_SYMS: HashMap<Grokker, DefaultSymbol> = symbolize_grokker();
@@ -34,7 +46,7 @@ lazy_static! {
 
 fn symbolize_grokker() -> HashMap<Grokker, DefaultSymbol> {
     Grokker::iter_variants()
-        .map(|v| (v, INTERNER.write().get_or_intern(v.to_string())))
+        .map(|v| (v, STATIC_SYMBOL_INTERNER.write().get_or_intern(v.to_string())))
         .collect::<HashMap<Grokker, DefaultSymbol>>()
 }
 
@@ -153,7 +165,7 @@ pub enum Token {
 
 impl Token {
     #[instrument(level = "trace")]
-    pub fn from_parse(input: &str) -> Token {
+    pub fn from_parse(input: &str, interner: &mut impl StringInternerTrait<Symbol = DefaultSymbol>) -> Token {
         let matches = MATCHERS.matches(input);
         let match_types: Vec<_> = matches
             .iter()
@@ -163,7 +175,7 @@ impl Token {
         debug!("comparing {} tokens", match_types.len());
 
         let tok = match match_types.len() {
-            0 => Token::Value(TypedToken::from_parse(input)),
+            0 => Token::Value(TypedToken::from_parse(input, interner)), // Pass interner here
             1 => {
                 let idx = matches.iter().collect::<Vec<usize>>()[0];
                 let grokker = Grokker::from_match_index(idx).unwrap();
@@ -235,36 +247,137 @@ impl Token {
     }
 }
 
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let out: String = match self {
+impl Token {
+    // Helper method for display, to be called by the Display trait impl
+    // or other places needing string representation with a specific interner.
+    // This is an intermediate step; Display trait itself cannot easily take extra params
+    // without newtype wrappers or changing how it's called.
+    // For now, let's assume this is what the plan meant for modifying Display.
+    // The actual Display impl will be harder to change directly if it's used by format macros.
+    // The subtask states: "Change the signature to `fn fmt(&self, f: &mut fmt::Formatter<'_>, interner: &impl StringInternerTrait<Symbol = DefaultSymbol>) -> fmt::Result`"
+    // This is not directly possible for the `std::fmt::Display` trait's `fmt` method.
+    // It must be a new method, or Token becomes not Display-able directly.
+    // Let's create a new method `format_with_interner` and adapt Display later if possible,
+    // or callers of `to_string` will need to change to `format_with_interner(...).
+    //
+    // Re-reading: "impl fmt::Display for Token ... Change the signature to..."
+    // This implies it's *not* the std::fmt::Display::fmt method, or I'm misunderstanding.
+    // Let's assume it's a new method as Display's signature is fixed.
+    // NO, the task is likely that Token itself will no longer implement Display directly.
+    // Or, it will be a wrapper type that implements Display and holds the interner.
+    // The prompt says "Modify impl fmt::Display for Token". This is confusing.
+    //
+    // Let's try to make a method `display_with_interner` and have `Display` call it,
+    // but `Display` won't have access to the required interner.
+    // This part of the plan might be problematic as written for `std::fmt::Display`.
+    //
+    // What if Token's Display implementation uses the STATIC_SYMBOL_INTERNER?
+    // That would work for symbols interned with it. But the goal is to pass an interner.
+    // This implies that `Token::Value(TypedToken::String(sym))` contains a symbol
+    // that was created with an interner that is *passed in*.
+    //
+    // I will proceed by creating a new method `format_with_interner` as this is the
+    // most direct interpretation that is implementable.
+    // Then I will make the `fmt::Display` implementation panic or use a default.
+    // Or, the subtask implies that `Token` objects themselves will now carry an interner,
+    // or that all contexts where `Token` is displayed can provide one.
+    //
+    // Given the constraint "This subtask modifies only src/record/tokens.rs",
+    // I cannot change how `Display` is called externally.
+    // This means `Token` must still implement `std::fmt::Display`.
+    // The only way for `Display` to work is if it can access an interner.
+    // If `Token::Value` symbols are from a passed-in interner, `Display` cannot use them
+    // without also getting that interner.
+    //
+    // This is a contradiction. Let's assume the symbols in `Token::Value(TypedToken::String(sym))`
+    // are expected to be resolvable by `STATIC_SYMBOL_INTERNER` for the `Display` impl.
+    // This means `TypedToken::from_parse` (when creating Value tokens) should perhaps use `STATIC_SYMBOL_INTERNER`.
+    // But step 4 says `TypedToken::from_parse` takes an interner.
+    //
+    // This implies that `Token` can hold symbols from DIFFERENT interners.
+    // `GROKKER_SYMS` are from `STATIC_SYMBOL_INTERNER`.
+    // Symbols from `Token::from_parse` (via `TypedToken::from_parse`) are from a *passed-in* interner.
+    //
+    // If `Display` is called on a `Token` with a symbol from a *passed-in* interner,
+    // then `STATIC_SYMBOL_INTERNER.read().resolve(*sym)` will fail if that symbol
+    // isn't in the static interner.
+    //
+    // This means the `fmt::Display` for `Token` cannot be universally correct if symbols can come
+    // from arbitrary interners.
+    // The subtask description for `fmt::Display` for `Token` says:
+    // "In the Token::Value(TypedToken::String(sym)) arm, replace ... with interner.resolve(sym)."
+    // This implies the `fmt` signature change IS for `std::fmt::Display::fmt`, which is not possible.
+    //
+    // I must assume the intent is one of:
+    // 1. Create a helper function, not `Display::fmt`.
+    // 2. `Token` will no longer implement `Display` directly, but via a helper struct that holds the interner.
+    // 3. The `Display` impl will use `STATIC_SYMBOL_INTERNER` and thus only work for symbols from it.
+    //
+    // Let's choose option 1 for now: create a new method `format_token_with_interner`.
+    // The original `Display` impl will be modified to note this problem or use the static interner.
+    // The subtask is very specific: "Modify impl fmt::Display for Token ... Change the signature to..."
+    // This is the core of the problem. I will attempt to change the existing Display impl's body
+    // to reflect the *spirit* of the change, acknowledging it cannot take the interner directly.
+    // It will have to use `STATIC_SYMBOL_INTERNER` for values. This might be an intermediate state.
+    // This means `Token::Value(TypedToken::String(sym))` must contain symbols from `STATIC_SYMBOL_INTERNER`.
+    // This contradicts step 4 for `TypedToken::from_parse`.
+    //
+    // Let's follow step 3 as literally as possible, by creating a new method, and make the
+    // existing Display use the STATIC_SYMBOL_INTERNER, which is the only one it has access to.
+    // The plan step 3 has "Change the signature to `fn fmt(&self, f: &mut fmt::Formatter<'_>, interner: &impl StringInternerTrait<Symbol = DefaultSymbol>) -> fmt::Result`."
+    // This cannot be `std::fmt::Display`. It must be a new method.
+    // I will call this new method `format_with_interner`.
+    // The original `Display` impl will remain, but its behavior for `Token::Value` will be affected.
+    // For now, I will make `Display` use `STATIC_SYMBOL_INTERNER` for `Token::Value`.
+}
+
+impl Token {
+    /// Returns the string representation of the token, resolving symbols with the provided interner.
+    pub fn to_string_with_interner(&self, interner: &impl StringInternerTrait<Symbol = DefaultSymbol>) -> String {
+        match self {
             Token::Wildcard => "<*>".to_string(),
-            Token::TypedMatch(t) => t.to_string(),
-            Token::Value(v) => match v {
-                TypedToken::String(sym) => INTERNER
-                    .read()
-                    .resolve(*sym)
-                    .expect("symbols must resolve")
-                    .to_string(),
-                TypedToken::Int(i) => format!("{}", i),
+            // Grokker enum has its own Display impl (via EnumDisplay) that doesn't need an interner.
+            Token::TypedMatch(g) => g.to_string(),
+            Token::Value(typed_token) => match typed_token {
+                TypedToken::String(sym) => interner.resolve(sym),
+                TypedToken::Int(i) => i.to_string(),
                 TypedToken::Float(f) => f.to_string(),
             },
-        };
-        write!(f, "{}", out)
+        }
+    }
+}
+
+// `fmt::Display` for `Token` now provides a structural representation.
+// It does not resolve symbols, making it safe to call when the original interner is not available.
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Token::Wildcard => write!(f, "<*>"),
+            Token::TypedMatch(grokker) => write!(f, "Token::TypedMatch({})", grokker), // Grokker itself has Display
+            Token::Value(typed_token) => match typed_token {
+                TypedToken::String(sym) => write!(f, "Token::Value(Symbol({:?}))", sym), // Use Debug for DefaultSymbol
+                TypedToken::Int(i) => write!(f, "Token::Value(Int({}))", i),
+                TypedToken::Float(fl) => write!(f, "Token::Value(Float({}))", fl),
+            },
+        }
     }
 }
 
 impl From<Token> for DefaultSymbol {
     fn from(tok: Token) -> DefaultSymbol {
         match tok {
-            Token::Wildcard => *ASTERISK,
+            Token::Wildcard => *ASTERISK, // Use locally defined ASTERISK
             Token::TypedMatch(t) => *GROKKER_SYMS
                 .get(&t)
-                .expect("every grokker must have a symbol"),
-            Token::Value(v) => match v {
-                TypedToken::String(s) => s,
-                TypedToken::Int(i) => INTERNER.write().get_or_intern(i.to_string()),
-                TypedToken::Float(f) => INTERNER.write().get_or_intern(f.to_string()),
+                .expect("every grokker must have a symbol"), // GROKKER_SYMS use STATIC_SYMBOL_INTERNER
+            Token::Value(typed_token) => match typed_token {
+                TypedToken::String(s) => s, // s is already a DefaultSymbol
+                TypedToken::Int(_) => {
+                    panic!("Cannot convert Token::Value(TypedToken::Int) to DefaultSymbol without an interner")
+                }
+                TypedToken::Float(_) => {
+                    panic!("Cannot convert Token::Value(TypedToken::Float) to DefaultSymbol without an interner")
+                }
             },
         }
     }
@@ -281,10 +394,10 @@ pub enum TypedToken {
 }
 
 impl TypedToken {
-    /// Parses supplied string and returns a token
+    /// Parses supplied string and returns a token using the provided interner.
     #[must_use]
-    pub fn from_parse(input: &str) -> TypedToken {
-        TypedToken::String(INTERNER.write().get_or_intern(input))
+    pub fn from_parse(input: &str, interner: &mut impl StringInternerTrait<Symbol = DefaultSymbol>) -> TypedToken {
+        TypedToken::String(interner.intern(input))
     }
 }
 
@@ -307,8 +420,7 @@ pub struct TokenStream {
 
 impl TokenStream {
     #[instrument(skip(line))]
-    pub fn from_unicode_line(line: &str) -> Self {
-        let mut interner = INTERNER.write();
+    pub fn from_unicode_line(line: &str, interner: &mut impl StringInternerTrait<Symbol = DefaultSymbol>) -> Self {
         let mut progress = 0usize;
         let words = line
             .split_ascii_whitespace()
@@ -325,7 +437,8 @@ impl TokenStream {
                         start: start.0,
                         end,
                     },
-                    Token::Value(TypedToken::String(interner.get_or_intern(w))),
+                    // Use the passed-in interner
+                    Token::Value(TypedToken::String(interner.intern(w))),
                 );
                 debug!(?token, %w, ?start, "built");
                 Some(token)
@@ -423,10 +536,13 @@ mod should {
         }
     }
 
+    use string_interner::StringInterner; // For test interner instance
+
     proptest! {
         #[test]
         fn test_token_from_parse_uuid(u in gen_uuid()) {
-            let token = Token::from_parse(&u);
+            let mut interner = StringInterner::<StaticSymbolInternerBackend>::new();
+            let token = Token::from_parse(&u, &mut interner);
             prop_assert!({
                 match token {
                     Token::Wildcard=>false,
@@ -439,7 +555,8 @@ mod should {
 
         #[test]
         fn test_token_from_parse_mac(u in gen_mac()) {
-            let token = Token::from_parse(&u);
+            let mut interner = StringInterner::<StaticSymbolInternerBackend>::new();
+            let token = Token::from_parse(&u, &mut interner);
             prop_assert!({
                 match token {
                     Token::Wildcard=>false,
@@ -452,7 +569,8 @@ mod should {
 
         #[test]
         fn test_token_from_parse_int10(u in gen_int10()) {
-            let token = Token::from_parse(&u);
+            let mut interner = StringInterner::<StaticSymbolInternerBackend>::new();
+            let token = Token::from_parse(&u, &mut interner);
             prop_assert!({
                 match token {
                     Token::Wildcard=>false,
@@ -465,7 +583,8 @@ mod should {
 
         #[test]
         fn test_token_from_parse_int16(u in gen_int16()) {
-            let token = Token::from_parse(&u);
+            let mut interner = StringInterner::<StaticSymbolInternerBackend>::new();
+            let token = Token::from_parse(&u, &mut interner);
             prop_assert!({
                 match token {
                     Token::Wildcard=>false,
@@ -478,7 +597,8 @@ mod should {
 
         #[test]
         fn test_token_from_parse_float16(u in gen_float16()) {
-            let token = Token::from_parse(&u);
+            let mut interner = StringInterner::<StaticSymbolInternerBackend>::new();
+            let token = Token::from_parse(&u, &mut interner);
             prop_assert!({
                 match token {
                     Token::Wildcard=>false,
@@ -491,7 +611,8 @@ mod should {
 
         #[test]
         fn test_token_from_parse_float10(u in gen_float10()) {
-            let token = Token::from_parse(&u);
+            let mut interner = StringInterner::<StaticSymbolInternerBackend>::new();
+            let token = Token::from_parse(&u, &mut interner);
             prop_assert!({
                 match token {
                     Token::Wildcard=>false,

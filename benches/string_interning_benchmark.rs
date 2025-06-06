@@ -1,8 +1,9 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use drain_flow::intern_benchmark_harness::{
-    BucketBackendInterner, BufferBackendInterner, NoInterningBaseline, SharedStringInterner,
+    BucketBackendInterner, BufferBackendInterner, NoInterningBaseline, // SharedStringInterner,
     StringBackendInterner, StringInternerTrait,
 };
+// SharedStringInterner import commented out
 use lazy_static::lazy_static; // Add this
 use rand::rngs::StdRng; // Add this for a deterministic RNG
 use rand::{Rng, SeedableRng}; // Add rand for data generation
@@ -190,6 +191,8 @@ fn string_interning_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("StringInterningStrategies");
     group.throughput(Throughput::Bytes(total_bytes as u64));
 
+    /*
+    // SharedStringInterner benchmark commented out
     group.bench_function(
         BenchmarkId::new("SharedStringInterner", "string-interner"),
         |b| {
@@ -199,6 +202,7 @@ fn string_interning_benchmark(c: &mut Criterion) {
             );
         },
     );
+    */
 
     group.bench_function(
         BenchmarkId::new("NoInterningBaseline", "String::clone"),

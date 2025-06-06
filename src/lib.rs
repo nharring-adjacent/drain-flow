@@ -14,6 +14,7 @@ extern crate custom_derive;
 extern crate enum_derive;
 
 pub mod drains;
+pub mod interner; // Added new module
 pub mod intern_benchmark_harness;
 pub mod log_group;
 pub mod record;

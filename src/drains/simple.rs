@@ -16,24 +16,23 @@ use joinery::{Joinable, JoinableIterator};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use regex::Regex;
-use string_interner::{DefaultSymbol, StringInterner};
+use string_interner::DefaultSymbol; // Keep DefaultSymbol
 use tracing::instrument;
 
+// Added imports for StringInternerTrait and BucketBackendInterner
+use crate::interner::{BucketBackendInterner, StringInternerTrait};
 use crate::{drains::api::Drain, log_group::LogGroup, record::Record};
 
-lazy_static! {
-    pub(crate) static ref INTERNER: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>> =
-        Arc::new(RwLock::new(StringInterner::<
-            string_interner::backend::BucketBackend,
-        >::new()));
-}
+// Removed: lazy_static! { pub(crate) static ref INTERNER ... }
+
 #[derive(Debug, Clone)]
 pub struct SingleLayer {
     pub domain: Vec<Regex>,
     // NumTokens -> First Token -> List of Log groups
     base_layer: HashMap<usize, HashMap<DefaultSymbol, Vec<LogGroup>>>,
     pub threshold: Ratio<BigInt>,
-    strings: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>>,
+    // Removed: strings: Arc<RwLock<StringInterner<...>>>
+    interner: BucketBackendInterner, // Added interner field
 }
 
 impl SingleLayer {
@@ -47,7 +46,8 @@ impl SingleLayer {
             domain: patterns,
             base_layer: HashMap::new(),
             threshold: Ratio::from_float::<f32>(0.5).expect("0.5 converts into a ratio"),
-            strings: INTERNER.clone(),
+            // Removed: strings: INTERNER.clone(),
+            interner: BucketBackendInterner::new(), // Initialize new interner
         })
     }
 
@@ -78,12 +78,11 @@ impl SingleLayer {
     }
 
     #[instrument(skip(self), level = "trace")]
-    pub fn resolve(&self, sym: DefaultSymbol) -> String {
-        self.strings
-            .read()
-            .resolve(sym)
-            .expect("symbols must resolve")
-            .to_owned()
+    pub fn resolve(&self, sym: &DefaultSymbol) -> String { // Changed to take &DefaultSymbol
+        self.interner
+            .resolve(sym) // Use self.interner.resolve
+            // .expect("symbols must resolve") // StringInternerTrait::resolve returns String, not Option
+            // .to_owned() // Not needed as resolve now returns String
     }
 }
 
@@ -99,7 +98,8 @@ impl Drain for SingleLayer {
         if line.is_empty() {
             return Ok(false);
         }
-        let new_record = Record::new(line);
+        // Pass self.interner to Record::new
+        let new_record = Record::new(line, &mut self.interner);
         let length = new_record.len();
         let first = new_record.first().expect("records have first tokens");
         if let Some(second_layer) = self.base_layer.get_mut(&length) {

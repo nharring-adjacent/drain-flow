@@ -1,6 +1,7 @@
 // src/drains/differential_drain.rs
 
 use crate::drains::api::Drain;
+use crate::interner::BucketBackendInterner; // Added for local interner
 use crate::log_group::LogGroup;
 use crate::record::Record;
 use anyhow::Error;
@@ -547,12 +548,16 @@ impl Drain for DifferentialDrain {
                     })
                     .collect::<Vec<&str>>()
                     .join(" ");
-                let base_record = Record::new(representative_line.clone());
+
+                // Instantiate a local interner for creating records within this method
+                let mut record_interner = BucketBackendInterner::new();
+
+                let base_record = Record::new(representative_line.clone(), &mut record_interner);
                 let mut log_group = LogGroup::new(base_record);
                 log_group.id = cluster.cluster_id;
                 for p_msg in &cluster.samples {
                     let example_line = p_msg.tokens.join(" ");
-                    let example_record = Record::new(example_line.clone());
+                    let example_record = Record::new(example_line.clone(), &mut record_interner);
                     log_group.add_example(example_record);
                 }
                 log_group
@@ -617,8 +622,7 @@ impl DifferentialDrain {
 mod tests {
     use super::*;
     use crate::drains::api::Drain;
-    // use crate::log_group::LogGroup; // Removed unused import
-    // use crate::record::Record; // Removed unused import
+    use crate::interner::{BucketBackendInterner, StringInternerTrait}; // For test interner and trait methods
 
     #[test]
     fn test_new_and_default_drain() {
@@ -767,9 +771,18 @@ mod tests {
         let group = &log_groups[0];
         assert_eq!(group.id, cluster_id);
         assert_eq!(group.len(), 1);
-        assert_eq!(group.base_record().to_string(), expected_tokens.join(" "));
+
+        let mut test_interner = BucketBackendInterner::new();
+        let expected_base_structural_string = expected_tokens.iter()
+            .map(|s| format!("Token::Value(Symbol({:?}))", test_interner.intern(s)))
+            .collect::<Vec<String>>().join(" ");
+        assert_eq!(group.base_record().to_string(), expected_base_structural_string);
+
         assert_eq!(group.examples().len(), 1);
-        assert_eq!(group.examples()[0].to_string(), expected_tokens.join(" "));
+        let expected_example_structural_string = expected_tokens.iter()
+            .map(|s| format!("Token::Value(Symbol({:?}))", test_interner.intern(s))) // Re-intern with same test_interner for consistent Symbol IDs if needed, though structure is key
+            .collect::<Vec<String>>().join(" ");
+        assert_eq!(group.examples()[0].to_string(), expected_example_structural_string);
     }
 
     #[test]
@@ -790,16 +803,30 @@ mod tests {
         let group = &log_groups[0];
         assert_eq!(group.id, cluster_id);
         assert_eq!(group.len(), 2);
-        assert_eq!(group.base_record().to_string(), "<*> log for multi-cluster");
+
+        let mut test_interner = BucketBackendInterner::new();
+        let base_template_tokens = ["*", "log", "for", "multi-cluster"]; // Template after generalization
+        let expected_base_structural_string = base_template_tokens.iter()
+            .map(|s| format!("Token::Value(Symbol({:?}))", test_interner.intern(s)))
+            .collect::<Vec<String>>().join(" ");
+        assert_eq!(group.base_record().to_string(), expected_base_structural_string);
+
         assert_eq!(group.examples().len(), 2);
-        assert!(group
-            .examples()
-            .iter()
-            .any(|r| r.to_string() == "First log for multi-cluster"));
-        assert!(group
-            .examples()
-            .iter()
-            .any(|r| r.to_string() == "Second log for multi-cluster"));
+        let example1_tokens = ["First", "log", "for", "multi-cluster"];
+        let expected_example1_structural_string = example1_tokens.iter()
+            .map(|s| format!("Token::Value(Symbol({:?}))", test_interner.intern(s)))
+            .collect::<Vec<String>>().join(" ");
+
+        let example2_tokens = ["Second", "log", "for", "multi-cluster"];
+        let expected_example2_structural_string = example2_tokens.iter()
+            .map(|s| format!("Token::Value(Symbol({:?}))", test_interner.intern(s)))
+            .collect::<Vec<String>>().join(" ");
+
+        assert!(group.examples().iter().any(|r| r.to_string() == expected_example1_structural_string || r.to_string() == expected_example2_structural_string));
+        // Check both are present
+        let example_strings: Vec<String> = group.examples().iter().map(|r| r.to_string()).collect();
+        assert!(example_strings.contains(&expected_example1_structural_string));
+        assert!(example_strings.contains(&expected_example2_structural_string));
     }
 
     #[test]
@@ -817,14 +844,17 @@ mod tests {
         let group = &log_groups[0];
         assert_eq!(group.id, cluster_id);
         assert_eq!(group.len(), 2);
-        assert_eq!(group.base_record().to_string(), "Repeated log line");
+
+        let mut test_interner = BucketBackendInterner::new();
+        let repeated_tokens = ["Repeated", "log", "line"];
+        let expected_structural_string = repeated_tokens.iter()
+            .map(|s| format!("Token::Value(Symbol({:?}))", test_interner.intern(s)))
+            .collect::<Vec<String>>().join(" ");
+        assert_eq!(group.base_record().to_string(), expected_structural_string);
+
         assert_eq!(group.examples().len(), 2);
         assert_eq!(
-            group
-                .examples()
-                .iter()
-                .filter(|r| r.to_string() == "Repeated log line")
-                .count(),
+            group.examples().iter().filter(|r| r.to_string() == expected_structural_string).count(),
             2
         );
     }

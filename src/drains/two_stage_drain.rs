@@ -21,14 +21,15 @@ use uuid::Uuid;
 use crate::drains::api::Drain;
 use crate::log_group::LogGroup;
 use crate::record::Record;
-// Removed: use crate::record::tokens::ASTERISK;
 
-// Use the shared interner from simple.rs
-use crate::drains::simple;
+// Use ASTERISK from tokens.rs, aliased as DRAIN_ASTERISK
+use crate::record::tokens::ASTERISK as DRAIN_ASTERISK;
+// Removed: use crate::drains::simple;
+// Removed: lazy_static! definition of DRAIN_ASTERISK using simple::INTERNER
 
-lazy_static! {
-    static ref DRAIN_ASTERISK: DefaultSymbol = simple::INTERNER.write().get_or_intern_static("<*>");
-}
+// Added imports for StringInternerTrait and BucketBackendInterner
+use crate::interner::{BucketBackendInterner, StringInternerTrait};
+// DefaultSymbol is already imported via string_interner
 
 #[derive(Debug, Clone)]
 pub enum NodeKind {
@@ -171,7 +172,8 @@ pub struct TwoStageDrain {
     pub domain: Vec<Regex>,
     pub tree: HashMap<usize, Node>,
     pub threshold: Ratio<BigInt>,
-    pub strings: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>>,
+    // Changed: pub strings: Arc<RwLock<StringInterner<...>>>
+    pub interner: BucketBackendInterner, // To: pub interner: BucketBackendInterner,
     pub max_depth: usize,
     pub max_children: usize,
     pub line_count_processed: usize, // Added for integration test harness
@@ -512,7 +514,8 @@ impl TwoStageDrain {
             domain: domain_patterns,
             tree: HashMap::new(),
             threshold: threshold_ratio,
-            strings: simple::INTERNER.clone(), // Use shared interner
+            // Changed: strings: simple::INTERNER.clone(),
+            interner: BucketBackendInterner::new(), // To: interner: BucketBackendInterner::new(),
             max_depth,
             max_children,
             line_count_processed: 0, // Initialize new field
@@ -540,17 +543,22 @@ impl Drain for TwoStageDrain {
             return Ok(false);
         }
 
-        let new_record = Record::new(processed_line.clone());
-
-        let processed_line_tokens: Vec<DefaultSymbol> = {
-            let mut interner = self.strings.write(); // Use self.strings (shared interner)
-            processed_line
-                .split_ascii_whitespace()
-                .map(|s| interner.get_or_intern(s))
-                .collect()
-        };
+        // processed_line_tokens are created using self.interner directly
+        let processed_line_tokens: Vec<DefaultSymbol> = processed_line
+            .split_ascii_whitespace()
+            .map(|s| self.interner.intern(s)) // Use self.interner.intern()
+            .collect();
 
         if processed_line_tokens.is_empty() {
+            return Ok(false);
+        }
+
+        // Create new_record only if processed_line_tokens is not empty,
+        // using the same processed_line that the tokens were derived from.
+        let new_record = Record::new(processed_line, &mut self.interner);
+
+        self.line_count_processed += 1;
+        let length = processed_line_tokens.len();
             return Ok(false);
         }
 
