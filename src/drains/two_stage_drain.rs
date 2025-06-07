@@ -164,7 +164,7 @@ fn collect_all_groups_in_subtree_free(
             }
         }
     }
-}
+} // Correctly closing fn collect_all_groups_in_subtree_free
 
 #[derive(Debug, Clone)]
 pub struct TwoStageDrain {

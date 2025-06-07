@@ -6,8 +6,9 @@ use drain_flow::intern_benchmark_harness::{
 use lazy_static::lazy_static; // Add this
 use rand::rngs::StdRng; // Add this for a deterministic RNG
 use rand::{Rng, SeedableRng}; // Add rand for data generation
-use regex::Regex; // Add this
-use std::collections::HashSet; // For Utc::now()
+use regex::Regex;
+use std::collections::HashSet; // Add this
+                               // For Utc::now()
 
 /*
 Benchmark Notes for String Interning Strategies (Typical Results for this Workload):
