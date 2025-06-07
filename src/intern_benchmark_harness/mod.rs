@@ -38,6 +38,17 @@ use string_interner::backend::{BucketBackend, BufferBackend, StringBackend}; // 
 use string_interner::DefaultSymbol;
 use string_interner::StringInterner; // Import RandomState
 
+// New crates for benchmarking
+use lasso::{Rodeo, Spur};
+// For interned-string v0.2.0, use IString
+// use interned_string::IString as InternedIString; // Alias to avoid confusion if IString is too generic
+// For intern_string v0.1.0, use Intern and InternId
+// use intern_string::{Intern as InternStringIntern, InternId as InternStringInternId};
+// For arc-string-interner
+use arc_string_interner::StringInterner as ArcStringInternerImpl;
+use arc_string_interner::Sym as ArcSym;
+
+
 /// An implementation of `StringInternerTrait` using the project's shared `string-interner`.
 pub struct SharedStringInterner {
     // Keep a reference to the global interner.
@@ -142,6 +153,149 @@ impl StringInternerTrait for SharedStringInterner {
         // "Leak" the string to get a 'static reference.
         // This is not truly 'a, but 'static. It will satisfy the compiler for 'a.
         Box::leak(resolved_str.to_string().into_boxed_str())
+    }
+}
+
+// Implementations for the new string interning crates
+
+// 1. Lasso Interner (using Rodeo)
+pub struct LassoInterner {
+    interner: Rodeo,
+}
+
+impl LassoInterner {
+    pub fn new() -> Self {
+        Self {
+            interner: Rodeo::new(),
+        }
+    }
+}
+
+impl Default for LassoInterner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StringInternerTrait for LassoInterner {
+    type Symbol = Spur;
+
+    fn intern(&mut self, s: &str) -> Self::Symbol {
+        self.interner.get_or_intern(s)
+    }
+
+    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
+        // Rodeo's resolve method returns &'a str where 'a is tied to &self.interner
+        // This matches the trait signature's requirement if we consider 'a to be tied to &'a self.
+        self.interner.resolve(symbol)
+    }
+}
+
+// 2. InternedString Interner (using interned_string::IString for v0.2.0) - COMMENTED OUT DUE TO COMPILATION ISSUES
+// pub struct InternedStringInterner {
+//     _marker: std::marker::PhantomData<()>,
+// }
+//
+// impl InternedStringInterner {
+//     pub fn new() -> Self {
+//         Self { _marker: std::marker::PhantomData }
+//     }
+// }
+//
+// impl Default for InternedStringInterner {
+//     fn default() -> Self {
+//         Self::new()
+//     }
+// }
+//
+// impl StringInternerTrait for InternedStringInterner {
+//     type Symbol = InternedIString;
+//
+//     fn intern(&mut self, s: &str) -> Self::Symbol {
+//         // This was failing with E0425: cannot find function `intern` in crate `interned_string`
+//         interned_string::intern(s)
+//     }
+//
+//     fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
+//         symbol.as_ref()
+//     }
+// }
+
+// 3. intern-string Interner (using intern_string::Intern and InternId for v0.1.0) - COMMENTED OUT DUE TO COMPILATION ISSUES
+// pub struct InternStringImplInterner {
+//     interner: InternStringIntern,
+// }
+//
+// impl InternStringImplInterner {
+//     pub fn new() -> Self {
+//         Self {
+//             interner: InternStringIntern::new(),
+//         }
+//     }
+// }
+//
+// impl Default for InternStringImplInterner {
+//     fn default() -> Self {
+//         Self::new()
+//     }
+// }
+//
+// impl StringInternerTrait for InternStringImplInterner {
+//     type Symbol = InternStringInternId;
+//
+//     fn intern(&mut self, s: &str) -> Self::Symbol {
+//         self.interner.intern(s)
+//     }
+//
+//     fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
+//         // This was failing with E0599: no method named `resolve` found (or `get`)
+//         let resolved_str = self.interner.resolve(*symbol)
+//             .expect("Symbol should exist in interner");
+//         Box::leak(resolved_str.to_string().into_boxed_str())
+//     }
+// }
+
+// 4. ArcStringInterner Interner
+pub struct ArcStringInternerImplInterner {
+    // S is the Symbol type (e.g., Sym), T is the string type (e.g., String)
+    // The interner itself is StringInterner<SymbolType, Hasher, CONST_N>
+    // It stores strings of type String by default if not specified otherwise via another generic arg not present here.
+    // The methods like get_or_intern will be generic over T: Borrow<str> + Hash + Eq + ...
+    // and T will be stored as String (or specified S in StringInterner<StringStored, Sym, H, N> if API was different)
+    interner: ArcStringInternerImpl<ArcSym, std::collections::hash_map::RandomState, 0>,
+}
+
+impl ArcStringInternerImplInterner {
+    pub fn new() -> Self {
+        Self {
+            interner: ArcStringInternerImpl::new(), // This will create StringInterner<Sym, RandomState, 0>
+        }
+    }
+}
+
+impl Default for ArcStringInternerImplInterner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StringInternerTrait for ArcStringInternerImplInterner {
+    type Symbol = ArcSym; // The symbol type used by the interner
+
+    fn intern(&mut self, s: &str) -> Self::Symbol {
+        // arc_string_interner stores T (e.g. String), interns it, and returns S (e.g. Sym)
+        // The method is get_or_intern(val: T) -> S
+        // By default T is String if StringInterner is StringInterner<Sym, RandomState, N>
+        self.interner.get_or_intern(s.to_string())
+    }
+
+    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
+        // resolve(symbol: S) -> Option<Arc<T>> where T is str by default for arc_string_interner
+        let arc_str_val: Arc<str> = self.interner.resolve(*symbol)
+            .expect("Symbol should exist in interner");
+        // To use into_boxed_str() for Box::leak, we need a String.
+        let owned_string: String = arc_str_val.to_string();
+        Box::leak(owned_string.into_boxed_str())
     }
 }
 

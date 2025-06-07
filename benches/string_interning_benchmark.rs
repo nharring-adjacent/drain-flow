@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use drain_flow::intern_benchmark_harness::{
-    BucketBackendInterner, BufferBackendInterner, NoInterningBaseline, SharedStringInterner,
-    StringBackendInterner, StringInternerTrait,
+    ArcStringInternerImplInterner, BucketBackendInterner, BufferBackendInterner, LassoInterner,
+    NoInterningBaseline, SharedStringInterner, StringBackendInterner, StringInternerTrait,
 };
 use lazy_static::lazy_static; // Add this
 use rand::rngs::StdRng; // Add this for a deterministic RNG
@@ -236,6 +236,28 @@ fn string_interning_benchmark(c: &mut Criterion) {
         |b| {
             b.iter_with_setup(
                 || (BufferBackendInterner::new(), log_lines.clone()),
+                |(mut interner, lines)| intern_lines(&mut interner, &lines),
+            );
+        },
+    );
+
+    // Add LassoInterner benchmark
+    group.bench_function(
+        BenchmarkId::new("LassoInterner", "lasso"),
+        |b| {
+            b.iter_with_setup(
+                || (LassoInterner::new(), log_lines.clone()),
+                |(mut interner, lines)| intern_lines(&mut interner, &lines),
+            );
+        },
+    );
+
+    // Add ArcStringInternerImplInterner benchmark
+    group.bench_function(
+        BenchmarkId::new("ArcStringInterner", "arc-string-interner"),
+        |b| {
+            b.iter_with_setup(
+                || (ArcStringInternerImplInterner::new(), log_lines.clone()),
                 |(mut interner, lines)| intern_lines(&mut interner, &lines),
             );
         },
