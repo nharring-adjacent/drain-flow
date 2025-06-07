@@ -262,7 +262,7 @@ pub struct ArcStringInternerImplInterner {
     // It stores strings of type String by default if not specified otherwise via another generic arg not present here.
     // The methods like get_or_intern will be generic over T: Borrow<str> + Hash + Eq + ...
     // and T will be stored as String (or specified S in StringInterner<StringStored, Sym, H, N> if API was different)
-    interner: ArcStringInternerImpl<ArcSym, std::collections::hash_map::RandomState, 0>,
+    interner: ArcStringInternerImpl<ArcSym, std::collections::hash_map::RandomState, 10>,
 }
 
 impl ArcStringInternerImplInterner {
