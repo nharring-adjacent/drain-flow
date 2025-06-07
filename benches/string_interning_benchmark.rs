@@ -1,13 +1,14 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use drain_flow::intern_benchmark_harness::{
-    BucketBackendInterner, BufferBackendInterner, NoInterningBaseline, SharedStringInterner,
-    StringBackendInterner, StringInternerTrait,
+    StringInternerTrait, SharedStringInterner, NoInterningBaseline,
+    StringBackendInterner, BucketBackendInterner, BufferBackendInterner
 };
-use lazy_static::lazy_static; // Add this
-use rand::rngs::StdRng; // Add this for a deterministic RNG
+use std::collections::HashSet;
 use rand::{Rng, SeedableRng}; // Add rand for data generation
-use regex::Regex; // Add this
-use std::collections::HashSet; // For Utc::now()
+use rand::rngs::StdRng;      // Add this for a deterministic RNG
+use lazy_static::lazy_static; // Add this
+use regex::Regex;             // Add this
+use chrono; // For Utc::now()
 
 /*
 Benchmark Notes for String Interning Strategies (Typical Results for this Workload):
@@ -29,22 +30,8 @@ fn get_log_lines() -> Vec<String> {
     let mut rng = StdRng::seed_from_u64(42); // Use a fixed seed for reproducibility
 
     let users = ["alice", "bob", "charlie", "dave", "eve", "mallory"];
-    let actions = [
-        "logged_in",
-        "logged_out",
-        "viewed_page",
-        "updated_profile",
-        "posted_comment",
-        "sent_message",
-    ];
-    let resources = [
-        "/home",
-        "/profile",
-        "/settings",
-        "/feed",
-        "/messages",
-        "/admin/users",
-    ];
+    let actions = ["logged_in", "logged_out", "viewed_page", "updated_profile", "posted_comment", "sent_message"];
+    let resources = ["/home", "/profile", "/settings", "/feed", "/messages", "/admin/users"];
     let ip_prefixes = ["192.168.1", "10.0.0", "172.16.0", "203.0.113"];
     let error_messages = [
         "Failed to connect to database",
@@ -52,27 +39,12 @@ fn get_log_lines() -> Vec<String> {
         "Disk space low",
         "Invalid credentials",
         "Request timed out",
-        "Resource not found",
+        "Resource not found"
     ];
     let log_levels = ["INFO", "WARN", "ERROR", "DEBUG"];
-    let common_words = [
-        "the",
-        "is",
-        "a",
-        "of",
-        "in",
-        "to",
-        "from",
-        "user",
-        "service",
-        "request",
-        "response",
-        "failed",
-        "successful",
-    ];
+    let common_words = ["the", "is", "a", "of", "in", "to", "from", "user", "service", "request", "response", "failed", "successful"];
 
-    for i in 0..10000 {
-        // Generate 10,000 log lines
+    for i in 0..10000 { // Generate 10,000 log lines
         let user = users[rng.random_range(0..users.len())];
         let action = actions[rng.random_range(0..actions.len())];
         let resource = resources[rng.random_range(0..resources.len())];
@@ -85,68 +57,11 @@ fn get_log_lines() -> Vec<String> {
         let common2 = common_words[rng.random_range(0..common_words.len())];
 
         let line = match i % 5 {
-            0 => format!(
-                "{} [{}]: User '{}' {} resource '{}' from {}.{}. Status: {}, Duration: {}ms. {} {}",
-                level,
-                chrono::Utc::now().to_rfc3339(),
-                user,
-                action,
-                resource,
-                ip_prefix,
-                ip_suffix,
-                status,
-                duration,
-                common1,
-                common2
-            ),
-            1 => format!(
-                "{} [{}]: {} - {} for user '{}'. Attempt from {}.{}. {} {}",
-                level,
-                chrono::Utc::now().to_rfc3339(),
-                error_messages[rng.random_range(0..error_messages.len())],
-                action,
-                user,
-                ip_prefix,
-                ip_suffix,
-                common1,
-                common2
-            ),
-            2 => format!(
-                "{} [{}]: Service health check: {}. Status: {}. {} {}",
-                level,
-                chrono::Utc::now().to_rfc3339(),
-                common1,
-                if rng.random_bool(0.9) {
-                    "OK"
-                } else {
-                    "DEGRADED"
-                },
-                common1,
-                common2
-            ),
-            3 => format!(
-                "{} [{}]: {} {} {} {} {} {}",
-                level,
-                chrono::Utc::now().to_rfc3339(),
-                common_words[rng.random_range(0..common_words.len())],
-                common_words[rng.random_range(0..common_words.len())],
-                common_words[rng.random_range(0..common_words.len())],
-                common_words[rng.random_range(0..common_words.len())],
-                common_words[rng.random_range(0..common_words.len())],
-                common_words[rng.random_range(0..common_words.len())]
-            ),
-            _ => format!(
-                "{} [{}]: User '{}' performed action '{}'. Details: {} {} {}. IP: {}.{}",
-                level,
-                chrono::Utc::now().to_rfc3339(),
-                user,
-                action,
-                common1,
-                common2,
-                resource,
-                ip_prefix,
-                ip_suffix
-            ),
+            0 => format!("{} [{}]: User '{}' {} resource '{}' from {}.{}. Status: {}, Duration: {}ms. {} {}", level, chrono::Utc::now().to_rfc3339(), user, action, resource, ip_prefix, ip_suffix, status, duration, common1, common2),
+            1 => format!("{} [{}]: {} - {} for user '{}'. Attempt from {}.{}. {} {}", level, chrono::Utc::now().to_rfc3339(), error_messages[rng.random_range(0..error_messages.len())], action, user, ip_prefix, ip_suffix, common1, common2),
+            2 => format!("{} [{}]: Service health check: {}. Status: {}. {} {}", level, chrono::Utc::now().to_rfc3339(), common1, if rng.random_bool(0.9) {"OK"} else {"DEGRADED"}, common1, common2),
+            3 => format!("{} [{}]: {} {} {} {} {} {}", level, chrono::Utc::now().to_rfc3339(), common_words[rng.random_range(0..common_words.len())], common_words[rng.random_range(0..common_words.len())], common_words[rng.random_range(0..common_words.len())], common_words[rng.random_range(0..common_words.len())], common_words[rng.random_range(0..common_words.len())], common_words[rng.random_range(0..common_words.len())]),
+            _ => format!("{} [{}]: User '{}' performed action '{}'. Details: {} {} {}. IP: {}.{}", level, chrono::Utc::now().to_rfc3339(), user, action, common1, common2, resource, ip_prefix, ip_suffix),
         };
         lines.push(line);
     }
@@ -163,8 +78,7 @@ lazy_static! {
         ([\w-]+) | # Words (alphanumeric, hyphen, underscore)
         (\S) # Any other non-whitespace character
     "#
-    )
-    .unwrap();
+    ).unwrap();
 }
 
 fn tokenize_line(line: &str) -> Vec<&str> {
@@ -190,55 +104,40 @@ fn string_interning_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("StringInterningStrategies");
     group.throughput(Throughput::Bytes(total_bytes as u64));
 
-    group.bench_function(
-        BenchmarkId::new("SharedStringInterner", "string-interner"),
-        |b| {
-            b.iter_with_setup(
-                || (SharedStringInterner::new(), log_lines.clone()), // Setup: create interner and clone lines
-                |(mut interner, lines)| intern_lines(&mut interner, &lines), // Action: intern the lines
-            );
-        },
-    );
+    group.bench_function(BenchmarkId::new("SharedStringInterner", "string-interner"), |b| {
+        b.iter_with_setup(
+            || (SharedStringInterner::new(), log_lines.clone()), // Setup: create interner and clone lines
+            |(mut interner, lines)| intern_lines(&mut interner, &lines), // Action: intern the lines
+        );
+    });
 
-    group.bench_function(
-        BenchmarkId::new("NoInterningBaseline", "String::clone"),
-        |b| {
-            b.iter_with_setup(
-                || (NoInterningBaseline::new(), log_lines.clone()),
-                |(mut interner, lines)| intern_lines(&mut interner, &lines),
-            );
-        },
-    );
+    group.bench_function(BenchmarkId::new("NoInterningBaseline", "String::clone"), |b| {
+        b.iter_with_setup(
+            || (NoInterningBaseline::new(), log_lines.clone()),
+            |(mut interner, lines)| intern_lines(&mut interner, &lines),
+        );
+    });
 
-    group.bench_function(
-        BenchmarkId::new("StringBackendInterner", "fresh-string-backend"),
-        |b| {
-            b.iter_with_setup(
-                || (StringBackendInterner::new(), log_lines.clone()),
-                |(mut interner, lines)| intern_lines(&mut interner, &lines),
-            );
-        },
-    );
+    group.bench_function(BenchmarkId::new("StringBackendInterner", "fresh-string-backend"), |b| {
+        b.iter_with_setup(
+            || (StringBackendInterner::new(), log_lines.clone()),
+            |(mut interner, lines)| intern_lines(&mut interner, &lines),
+        );
+    });
 
-    group.bench_function(
-        BenchmarkId::new("BucketBackendInterner", "bucket-backend"),
-        |b| {
-            b.iter_with_setup(
-                || (BucketBackendInterner::new(), log_lines.clone()),
-                |(mut interner, lines)| intern_lines(&mut interner, &lines),
-            );
-        },
-    );
+    group.bench_function(BenchmarkId::new("BucketBackendInterner", "bucket-backend"), |b| {
+        b.iter_with_setup(
+            || (BucketBackendInterner::new(), log_lines.clone()),
+            |(mut interner, lines)| intern_lines(&mut interner, &lines),
+        );
+    });
 
-    group.bench_function(
-        BenchmarkId::new("BufferBackendInterner", "buffer-backend"),
-        |b| {
-            b.iter_with_setup(
-                || (BufferBackendInterner::new(), log_lines.clone()),
-                |(mut interner, lines)| intern_lines(&mut interner, &lines),
-            );
-        },
-    );
+    group.bench_function(BenchmarkId::new("BufferBackendInterner", "buffer-backend"), |b| {
+        b.iter_with_setup(
+            || (BufferBackendInterner::new(), log_lines.clone()),
+            |(mut interner, lines)| intern_lines(&mut interner, &lines),
+        );
+    });
 
     group.finish();
 }
