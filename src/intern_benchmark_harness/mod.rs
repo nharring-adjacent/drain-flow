@@ -38,6 +38,7 @@ use string_interner::StringInterner;
 use string_interner::backend::{StringBackend, BucketBackend, BufferBackend}; // Import backends
 use std::collections::hash_map::RandomState; // Import RandomState
 
+
 /// An implementation of `StringInternerTrait` using the project's shared `string-interner`.
 pub struct SharedStringInterner {
     // Keep a reference to the global interner.
@@ -136,7 +137,9 @@ impl StringInternerTrait for SharedStringInterner {
         // This is ONLY for the benchmark context to satisfy the trait.
         // **This is generally a bad idea for production code.**
         let guard = self.interner_arc.read();
-        let resolved_str = guard.resolve(*symbol).expect("Symbol should exist in interner");
+        let resolved_str = guard
+            .resolve(*symbol)
+            .expect("Symbol should exist in interner");
         // "Leak" the string to get a 'static reference.
         // This is not truly 'a, but 'static. It will satisfy the compiler for 'a.
         Box::leak(resolved_str.to_string().into_boxed_str())
@@ -210,7 +213,10 @@ impl StringInternerTrait for StringBackendInterner {
     }
 
     fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
-        let resolved_str = self.interner.resolve(*symbol).expect("Symbol should exist in interner");
+        let resolved_str = self
+            .interner
+            .resolve(*symbol)
+            .expect("Symbol should exist in interner");
         Box::leak(resolved_str.to_string().into_boxed_str())
     }
 }
@@ -242,7 +248,10 @@ impl StringInternerTrait for BucketBackendInterner {
     }
 
     fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
-        let resolved_str = self.interner.resolve(*symbol).expect("Symbol should exist in interner");
+        let resolved_str = self
+            .interner
+            .resolve(*symbol)
+            .expect("Symbol should exist in interner");
         Box::leak(resolved_str.to_string().into_boxed_str())
     }
 }
@@ -274,7 +283,10 @@ impl StringInternerTrait for BufferBackendInterner {
     }
 
     fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
-        let resolved_str = self.interner.resolve(*symbol).expect("Symbol should exist in interner");
+        let resolved_str = self
+            .interner
+            .resolve(*symbol)
+            .expect("Symbol should exist in interner");
         Box::leak(resolved_str.to_string().into_boxed_str())
     }
 }
