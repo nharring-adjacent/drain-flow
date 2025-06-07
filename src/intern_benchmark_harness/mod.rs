@@ -31,13 +31,12 @@ pub trait StringInternerTrait {
 }
 
 use crate::drains::simple::INTERNER as SHARED_INTERNER; // Access the global interner
-use string_interner::DefaultSymbol;
-use std::sync::Arc;
 use parking_lot::RwLock;
-use string_interner::StringInterner;
-use string_interner::backend::{StringBackend, BucketBackend, BufferBackend}; // Import backends
-use std::collections::hash_map::RandomState; // Import RandomState
-
+use std::collections::hash_map::RandomState;
+use std::sync::Arc;
+use string_interner::backend::{BucketBackend, BufferBackend, StringBackend}; // Import backends
+use string_interner::DefaultSymbol;
+use string_interner::StringInterner; // Import RandomState
 
 /// An implementation of `StringInternerTrait` using the project's shared `string-interner`.
 pub struct SharedStringInterner {
