@@ -242,15 +242,12 @@ fn string_interning_benchmark(c: &mut Criterion) {
     );
 
     // Add LassoInterner benchmark
-    group.bench_function(
-        BenchmarkId::new("LassoInterner", "lasso"),
-        |b| {
-            b.iter_with_setup(
-                || (LassoInterner::new(), log_lines.clone()),
-                |(mut interner, lines)| intern_lines(&mut interner, &lines),
-            );
-        },
-    );
+    group.bench_function(BenchmarkId::new("LassoInterner", "lasso"), |b| {
+        b.iter_with_setup(
+            || (LassoInterner::new(), log_lines.clone()),
+            |(mut interner, lines)| intern_lines(&mut interner, &lines),
+        );
+    });
 
     // Add ArcStringInternerImplInterner benchmark
     group.bench_function(

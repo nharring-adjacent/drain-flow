@@ -48,7 +48,6 @@ use lasso::{Rodeo, Spur};
 use arc_string_interner::StringInterner as ArcStringInternerImpl;
 use arc_string_interner::Sym as ArcSym;
 
-
 /// An implementation of `StringInternerTrait` using the project's shared `string-interner`.
 pub struct SharedStringInterner {
     // Keep a reference to the global interner.
@@ -291,7 +290,9 @@ impl StringInternerTrait for ArcStringInternerImplInterner {
 
     fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
         // resolve(symbol: S) -> Option<Arc<T>> where T is str by default for arc_string_interner
-        let arc_str_val: Arc<str> = self.interner.resolve(*symbol)
+        let arc_str_val: Arc<str> = self
+            .interner
+            .resolve(*symbol)
             .expect("Symbol should exist in interner");
         // To use into_boxed_str() for Box::leak, we need a String.
         let owned_string: String = arc_str_val.to_string();
