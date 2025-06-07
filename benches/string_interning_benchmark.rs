@@ -8,7 +8,7 @@ use rand::{Rng, SeedableRng}; // Add rand for data generation
 use rand::rngs::StdRng;      // Add this for a deterministic RNG
 use lazy_static::lazy_static; // Add this
 use regex::Regex;             // Add this
-use chrono; // For Utc::now()
+ // For Utc::now()
 
 /*
 Benchmark Notes for String Interning Strategies (Typical Results for this Workload):
