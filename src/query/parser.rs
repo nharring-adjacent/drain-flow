@@ -90,7 +90,7 @@ fn parse_label_matcher(pair: pest::iterators::Pair<Rule>) -> Result<LabelMatcher
     };
 
     let value_str_raw = quoted_string_pair.as_str();
-    let value = value_str_raw.trim_start_matches(''').trim_end_matches(''').trim_start_matches('"').trim_end_matches('"').to_string();
+    let value = value_str_raw.trim_start_matches('\'').trim_end_matches('\'').trim_start_matches('"').trim_end_matches('"').to_string();
     // FIXME: Add proper unescaping of string literals
 
     Ok(LabelMatcher { label, op, value })
@@ -115,7 +115,7 @@ fn parse_line_filter(pair: pest::iterators::Pair<Rule>) -> Result<LineFilterExpr
     };
 
     let value_str_raw = quoted_string_pair.as_str();
-    let value = value_str_raw.trim_start_matches(''').trim_end_matches(''').trim_start_matches('"').trim_end_matches('"').to_string();
+    let value = value_str_raw.trim_start_matches('\'').trim_end_matches('\'').trim_start_matches('"').trim_end_matches('"').to_string();
     // FIXME: Add proper unescaping for line filter values
 
     Ok(LineFilterExpression { op, value })
@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_parse_stream_selector_label_with_hyphen_and_underscore() {
-        let query_str = "{app_name="my-app", job_id!~"id-\\d+"}"; // Escaped \d for Rust string
+        let query_str = "{app_name="my-app", job_id!~"id-\\\\d+"}"; // Escaped \d for Rust string
         let expected_ast = AstQuery::LogPipeline(LogPipeline {
             selector: LogStreamSelector {
                 labels: vec![
@@ -234,7 +234,7 @@ mod tests {
                     LabelMatcher {
                         label: "job_id".to_string(),
                         op: MatcherOp::RegexNoMatch,
-                        value: "id-\d+".to_string(), // Compare with unescaped version
+                        value: r"id-\d+".to_string(), // Compare with unescaped version
                     },
                 ],
             },

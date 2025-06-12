@@ -5,8 +5,6 @@ edition = "2021"
 rust-version="1.78.0"
 
 [dependencies]
-pest = "2.7.7"
-pest_derive = "2.7.7"
 anyhow = "1.0.63"
 arc-string-interner = "0.3.0-alpha2"
 chrono = "0.4.22"
@@ -34,6 +32,11 @@ timely = "0.12"
 lasso = "0.7.1"
 interned-string = "*"
 intern_string = "*"
+parol_runtime = "^3.0"
+parol-macros = "^1.0"
+
+[build-dependencies]
+parol = "^3.0"
 
 [dev-dependencies]
 chrono = "0.4"

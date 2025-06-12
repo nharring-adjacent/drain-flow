@@ -1,0 +1,48 @@
+%start Query
+// %grammar_type 'LALR(1)' // Optional: Parol defaults to LL(k), can switch to LALR(1)
+// Comments for the .par file itself
+// Define language comments for LogQL (if any, LogQL doesn't have standard comments within the query itself)
+
+%%
+// Productions
+
+Query: StreamSelector; // Simplified for now
+
+StreamSelector: LBrace^ LabelMatcherList RBrace^;
+LBrace: '\{'; // Literal brace
+RBrace: '\}'; // Literal brace
+
+// Zero or more LabelMatchers, separated by Commas
+// Parol EBNF for this might be: LabelMatcher (','^ LabelMatcher)*
+// For now, let's try a simpler list structure if direct EBNF * or ? is not obvious
+// This might need refinement based on Parol's exact EBNF support for lists.
+// Let's assume a common way to write lists:
+LabelMatcherList: LabelMatcherOpt (Comma^ LabelMatcher OptComma)*;
+LabelMatcherOpt: LabelMatcher?; // Optional LabelMatcher for empty list case
+OptComma: Comma?; // Optional trailing comma, might need specific handling
+
+LabelMatcher: Identifier MatcherOp QuotedString;
+
+Identifier: /[a-zA-Z_][a-zA-Z0-9_-]*/;
+MatcherOp: Eq | Neq | ReMatch | ReNoMatch;
+Eq: '=';
+Neq: '!=';
+ReMatch: '=~';
+ReNoMatch: '!~';
+
+// For QuotedString, we need to handle escapes.
+// This is a common pattern: quote, content (escaped or normal), quote
+QuotedString: DoubleQuotedString | SingleQuotedString;
+DoubleQuotedString: DQuote^ InnerDoubleQuotedString DQuote^;
+DQuote: '\"'; // Literal double quote
+// InnerDoubleQuotedString should match any char not a backslash or double quote, or an escaped char
+InnerDoubleQuotedString: /([^\"]|\\.)*/; // Regex: any char not \ or ", or any escaped char
+
+SingleQuotedString: SQuote^ InnerSingleQuotedString SQuote^;
+SQuote: "'"; // Literal single quote
+InnerSingleQuotedString: /([^']|\\.)*/; // Regex: any char not ', or any escaped char (if single quotes can escape)
+                                    // If single quotes don't support escapes: /[^']*/
+
+Comma: ',';
+
+// Cut operator '^' is used to omit tokens from AST where appropriate.

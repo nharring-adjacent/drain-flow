@@ -12,14 +12,14 @@ pub use parser::parse_logql_query;
 // Server Side Public License along with this program.
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
-//! # Log Querying System
-//!
-//! This module provides structures and functions for querying log data.
-//! The central component is the [`LogStore`], which acts as an abstraction layer
-//! over a log data source, represented by an implementation of the [`Drain`](crate::drains::api::Drain) trait.
-//!
-//! It also defines LogQL (Log Query Language) related structures like [`LogQlQuery`],
-//! [`StreamSelector`], and [`LineFilter`] to enable structured querying of logs.
+/// # Log Querying System
+///
+/// This module provides structures and functions for querying log data.
+/// The central component is the [`LogStore`], which acts as an abstraction layer
+/// over a log data source, represented by an implementation of the [`Drain`](crate::drains::api::Drain) trait.
+///
+/// It also defines LogQL (Log Query Language) related structures like [`LogQlQuery`],
+/// [`StreamSelector`], and [`LineFilter`] to enable structured querying of logs.
 
 use crate::drains::api::Drain;
 use crate::log_group::LogGroup;
