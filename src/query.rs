@@ -1,3 +1,7 @@
+pub mod ast;
+pub mod parser;
+pub use parser::parse_logql_query;
+
 // Copyright Nicholas Harring. All rights reserved.
 //
 // This program is free software: you can redistribute it and/or modify it under
