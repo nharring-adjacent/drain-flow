@@ -35,7 +35,7 @@ fn print_groups_summary(drain_name: &str, groups: &[LogGroup]) {
     println!("--------------------");
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy_prototype"))] // Ensure it's only compiled for tests AND when feature is active
 mod comparative_tests {
     use super::*; // Import helpers and structs from parent module
 

@@ -47,6 +47,7 @@ lazy_static! {
         .collect::<HashMap<usize, Grokker>>();
 }
 
+
 #[cfg(feature = "legacy_prototype")]
 fn symbolize_grokker() -> HashMap<Grokker, DefaultSymbol> {
     Grokker::iter_variants()

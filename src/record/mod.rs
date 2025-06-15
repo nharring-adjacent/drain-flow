@@ -13,6 +13,7 @@ extern crate derive_more;
 
 use std::fmt;
 
+use lazy_static::lazy_static;
 use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 use uuid::Uuid;

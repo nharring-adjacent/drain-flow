@@ -32,6 +32,7 @@ pub trait StringInternerTrait {
 
 #[cfg(feature = "legacy_prototype")]
 use crate::drains::simple::INTERNER as SHARED_INTERNER; // Access the global interner
+use parking_lot::RwLock;
 use std::collections::hash_map::RandomState;
 use std::sync::Arc;
 use string_interner::backend::{BucketBackend, BufferBackend, StringBackend}; // Import backends
