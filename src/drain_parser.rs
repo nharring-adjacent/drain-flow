@@ -1,7 +1,7 @@
 use crate::core_structures::{
     LogTemplate, ParameterValue, ParsedLogEntry, RawLogEntry, TemplateToken,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use string_interner::{StringInterner, DefaultSymbol};
 use uuid::Uuid;
 use regex::Regex; // For tokenization
