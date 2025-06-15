@@ -30,6 +30,7 @@ pub trait StringInternerTrait {
     fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str;
 }
 
+#[cfg(feature = "legacy_prototype")]
 use crate::drains::simple::INTERNER as SHARED_INTERNER; // Access the global interner
 use parking_lot::RwLock;
 use std::collections::hash_map::RandomState;
@@ -49,6 +50,7 @@ use arc_string_interner::StringInterner as ArcStringInternerImpl;
 use arc_string_interner::Sym as ArcSym;
 
 /// An implementation of `StringInternerTrait` using the project's shared `string-interner`.
+#[cfg(feature = "legacy_prototype")]
 pub struct SharedStringInterner {
     // Keep a reference to the global interner.
     // The global INTERNER is Arc<RwLock<StringInterner<...>>>
@@ -56,6 +58,7 @@ pub struct SharedStringInterner {
     interner_arc: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>>,
 }
 
+#[cfg(feature = "legacy_prototype")]
 impl SharedStringInterner {
     pub fn new() -> Self {
         Self {
@@ -64,6 +67,7 @@ impl SharedStringInterner {
     }
 }
 
+#[cfg(feature = "legacy_prototype")]
 impl StringInternerTrait for SharedStringInterner {
     type Symbol = DefaultSymbol;
 
@@ -301,6 +305,7 @@ impl StringInternerTrait for ArcStringInternerImplInterner {
 }
 
 // Add a default impl for SharedStringInterner
+#[cfg(feature = "legacy_prototype")]
 impl Default for SharedStringInterner {
     fn default() -> Self {
         Self::new()

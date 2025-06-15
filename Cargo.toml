@@ -7,7 +7,7 @@ rust-version="1.78.0"
 [dependencies]
 anyhow = "1.0.63"
 arc-string-interner = "0.3.0-alpha2"
-chrono = "0.4.22"
+chrono = { version = "0.4.22", features = ["serde"] }
 custom_derive = "0.1.7"
 derive_more = { version="2.0.0", features=["full"]}
 enum_derive = "0.1.7"
@@ -34,7 +34,7 @@ interned-string = "*"
 intern_string = "*"
 
 [dev-dependencies]
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 criterion = {version = "0.5.1", features = ["html_reports"]}
 proptest = "1.0.0"
 rand = "0.9.0" # Reverted to original version
@@ -72,3 +72,4 @@ harness = false
 
 [features]
 intern_benchmark_harness = []
+legacy_prototype = []

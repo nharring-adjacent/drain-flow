@@ -20,7 +20,11 @@
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
 pub mod api;
+#[cfg(feature = "legacy_prototype")]
 pub mod differential_drain;
+#[cfg(feature = "legacy_prototype")]
 pub mod simple;
+#[cfg(feature = "legacy_prototype")]
 pub mod two_stage_drain;
+#[cfg(feature = "legacy_prototype")]
 pub use differential_drain::DifferentialDrain;

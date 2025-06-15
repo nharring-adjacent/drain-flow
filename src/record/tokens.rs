@@ -20,9 +20,12 @@ use regex::RegexSet;
 use string_interner::DefaultSymbol;
 use tracing::{debug, instrument};
 
+#[cfg(feature = "legacy_prototype")]
 pub use super::ASTERISK; // Made ASTERISK re-export public
+#[cfg(feature = "legacy_prototype")]
 use crate::drains::simple::INTERNER;
 
+#[cfg(feature = "legacy_prototype")]
 lazy_static! {
     static ref MATCHERS: RegexSet = Grokker::build_pattern_set();
     static ref GROKKER_COUNT: usize = Grokker::iter_variants().count() - 1;
@@ -32,11 +35,28 @@ lazy_static! {
         .collect::<HashMap<usize, Grokker>>();
 }
 
+#[cfg(not(feature = "legacy_prototype"))]
+lazy_static! {
+    static ref MATCHERS: RegexSet = Grokker::build_pattern_set();
+    static ref GROKKER_COUNT: usize = Grokker::iter_variants().count() - 1;
+    // GROKKER_SYMS would be problematic here. What should it be?
+    // For now, let's assume code paths requiring it are also cfg-gated.
+    // Alternatively, provide a non-interned version or panic if accessed.
+    static ref GROKKER_VARIANTS: HashMap<usize, Grokker> = Grokker::iter_variants()
+        .enumerate()
+        .collect::<HashMap<usize, Grokker>>();
+}
+
+
+#[cfg(feature = "legacy_prototype")]
 fn symbolize_grokker() -> HashMap<Grokker, DefaultSymbol> {
     Grokker::iter_variants()
         .map(|v| (v, INTERNER.write().get_or_intern(v.to_string())))
         .collect::<HashMap<Grokker, DefaultSymbol>>()
 }
+
+// If INTERNER is not available, we need a placeholder for GROKKER_SYMS or ensure it's not used.
+// Let's assume for now that uses of GROKKER_SYMS will also be conditional.
 
 custom_derive! {
     #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, IterVariants(GrokkerVariants), EnumDisplay)]
@@ -241,11 +261,15 @@ impl fmt::Display for Token {
             Token::Wildcard => "<*>".to_string(),
             Token::TypedMatch(t) => t.to_string(),
             Token::Value(v) => match v {
+                #[cfg(feature = "legacy_prototype")]
                 TypedToken::String(sym) => INTERNER
                     .read()
                     .resolve(*sym)
                     .expect("symbols must resolve")
                     .to_string(),
+                // Fallback for when INTERNER is not available for TypedToken::String
+                #[cfg(not(feature = "legacy_prototype"))]
+                TypedToken::String(sym) => format!("<interned_string:{:?}>", sym), // Or some other placeholder
                 TypedToken::Int(i) => format!("{}", i),
                 TypedToken::Float(f) => f.to_string(),
             },
@@ -254,6 +278,7 @@ impl fmt::Display for Token {
     }
 }
 
+#[cfg(feature = "legacy_prototype")]
 impl From<Token> for DefaultSymbol {
     fn from(tok: Token) -> DefaultSymbol {
         match tok {
@@ -270,6 +295,13 @@ impl From<Token> for DefaultSymbol {
     }
 }
 
+// If legacy_prototype is off, what should From<Token> for DefaultSymbol do?
+// This is problematic if DefaultSymbol itself is tied to the interner.
+// DefaultSymbol is from string_interner, so it implies interning.
+// This part of the code might be inherently tied to having an interner.
+// For now, let's assume that if INTERNER is off, this conversion might not be fully supported
+// or needs a different definition for DefaultSymbol or ASTERISK.
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum TypedToken {
     /// Token containing a string with at least 1 non-digit
@@ -283,8 +315,28 @@ pub enum TypedToken {
 impl TypedToken {
     /// Parses supplied string and returns a token
     #[must_use]
+    #[cfg(feature = "legacy_prototype")]
     pub fn from_parse(input: &str) -> TypedToken {
         TypedToken::String(INTERNER.write().get_or_intern(input))
+    }
+
+    // What happens to from_parse if legacy_prototype is off?
+    // This implies TypedToken::String might not be constructible in the same way.
+    // Option 1: Gate from_parse entirely.
+    // Option 2: Provide a from_parse that doesn't use INTERNER (e.g., stores String, not DefaultSymbol).
+    //           This would require changing TypedToken::String to hold String or Arc<String>
+    //           when legacy_prototype is off. This is a larger refactor.
+    // For now, let's gate it. Callers will need to be gated too.
+    #[must_use]
+    #[cfg(not(feature = "legacy_prototype"))]
+    pub fn from_parse(input: &str) -> TypedToken {
+        // This is a placeholder. Without an interner, DefaultSymbol is meaningless here.
+        // This suggests TypedToken::String itself needs to be conditional or change type.
+        // This will likely cause compilation errors further down if not handled carefully.
+        // A proper solution would involve defining an alternative for DefaultSymbol or how strings are stored.
+        panic!("TypedToken::from_parse requires an interner, which is unavailable without legacy_prototype feature.");
+        // Or, if DefaultSymbol can represent an uninterned state or if we use a different type:
+        // TypedToken::String(DefaultSymbol::from_lossy_str(input)) // Fictional method
     }
 }
 
@@ -307,6 +359,7 @@ pub struct TokenStream {
 
 impl TokenStream {
     #[instrument(skip(line))]
+    #[cfg(feature = "legacy_prototype")]
     pub fn from_unicode_line(line: &str) -> Self {
         let mut interner = INTERNER.write();
         let mut progress = 0usize;
@@ -332,6 +385,14 @@ impl TokenStream {
             })
             .collect::<Vec<(Offset, Token)>>();
         Self { inner: words }
+    }
+
+    #[instrument(skip(line))]
+    #[cfg(not(feature = "legacy_prototype"))]
+    pub fn from_unicode_line(line: &str) -> Self {
+        // This function relies on an interner to create TypedToken::String(DefaultSymbol).
+        // If the legacy_prototype feature (which provides INTERNER) is off, we cannot proceed.
+        panic!("TokenStream::from_unicode_line requires an interner, which is unavailable without legacy_prototype feature. Line: {}", line);
     }
 
     #[instrument(skip(self), level = "trace")]

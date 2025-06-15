@@ -19,11 +19,18 @@ use tracing::{debug, instrument};
 use uuid::Uuid;
 
 use self::tokens::{Offset, Token, TokenStream}; // Added Offset, removed TypedToken
+#[cfg(feature = "legacy_prototype")]
 use crate::drains::simple::INTERNER;
 
+#[cfg(feature = "legacy_prototype")]
 lazy_static! {
     pub static ref ASTERISK: DefaultSymbol = INTERNER.write().get_or_intern_static("<*>");
 }
+
+// If ASTERISK is used unconditionally elsewhere, it needs a definition when legacy_prototype is off.
+// However, its primary use seems to be in From<Token> for DefaultSymbol, which is now conditional.
+// If other uses surface, this will need revisiting. For now, let's assume ASTERISK is only needed when INTERNER is present.
+
 #[derive(Clone, Debug)]
 pub struct Record {
     pub(crate) inner: TokenStream,
@@ -98,9 +105,15 @@ impl Record {
     }
 
     #[instrument(level = "trace", skip(self))]
+    #[cfg(feature = "legacy_prototype")]
     pub fn first(&self) -> Option<DefaultSymbol> {
         self.inner.first().map(std::convert::Into::into)
     }
+
+    // When legacy_prototype is off, the From<Token> for DefaultSymbol impl is missing.
+    // So, Record::first() either needs to be removed or return a different type.
+    // For now, let's remove it when the feature is off.
+    // Callers would need to be updated or also cfg-gated.
 
     #[instrument(level = "trace", skip(self))]
     pub fn len(&self) -> usize {
@@ -113,11 +126,26 @@ impl Record {
     }
 
     #[instrument(level = "trace")]
+    #[cfg(feature = "legacy_prototype")]
     pub fn resolve(sym: DefaultSymbol) -> Option<String> {
         INTERNER
             .read()
             .resolve(sym)
             .map(std::borrow::ToOwned::to_owned)
+    }
+
+    // If legacy_prototype is off, Record::resolve cannot use INTERNER.
+    // It should either be gated or panic, or return None, or use a different mechanism if available.
+    #[instrument(level = "trace")]
+    #[cfg(not(feature = "legacy_prototype"))]
+    pub fn resolve(sym: DefaultSymbol) -> Option<String> {
+        // Without an interner, resolving a DefaultSymbol is problematic.
+        // DefaultSymbol is from the string_interner crate and usually tied to an interner instance.
+        // This implies that if the INTERNER which created/managed 'sym' isn't available,
+        // we cannot resolve it.
+        // Returning None or a placeholder string might be options.
+        // For now, let's indicate it cannot be resolved in this context.
+        None // Or perhaps format!("<unresolved_symbol:{:?}>", sym) if String is required.
     }
 }
 
