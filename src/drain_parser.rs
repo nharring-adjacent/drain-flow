@@ -1,13 +1,13 @@
 use crate::core_structures::{
     LogTemplate, ParameterValue, ParsedLogEntry, RawLogEntry, TemplateToken,
 };
-use std::collections::HashMap;
-use string_interner::{StringInterner, DefaultSymbol};
-use uuid::Uuid;
+use crate::record::tokens::Grokker;
 use regex::Regex; // For tokenization
-use crate::record::tokens::Grokker; // To use Grokker patterns and logic
-                                  // Might need to adjust path if Grokker becomes non-pub or is refactored.
-                                  // For now, assume it's accessible.
+use std::collections::HashMap;
+use string_interner::{DefaultSymbol, StringInterner};
+use uuid::Uuid; // To use Grokker patterns and logic
+                // Might need to adjust path if Grokker becomes non-pub or is refactored.
+                // For now, assume it's accessible.
 
 // Type alias for interned strings
 type InternedString = DefaultSymbol;
@@ -54,7 +54,6 @@ pub struct DrainParser {
     // Keep track of Grokker patterns for parameter typing
     // This might involve storing RegexSet or individual Regexes from Grokker
     grokker_patterns: Vec<(Grokker, Regex)>,
-
 }
 
 impl DrainParser {
@@ -160,11 +159,17 @@ impl DrainParser {
             .collect()
     }
 
-    fn calculate_similarity(&self, log_tokens: &[InternedString], template: &LogTemplate, interner: &StringInterner<string_interner::backend::BucketBackend>) -> f32 {
+    fn calculate_similarity(
+        &self,
+        log_tokens: &[InternedString],
+        template: &LogTemplate,
+        interner: &StringInterner<string_interner::backend::BucketBackend>,
+    ) -> f32 {
         if log_tokens.len() != template.tokens.len() {
             return 0.0;
         }
-        if log_tokens.is_empty() { // Avoid division by zero for empty token lists
+        if log_tokens.is_empty() {
+            // Avoid division by zero for empty token lists
             return 1.0; // Or 0.0, depending on desired behavior for empty logs
         }
 
@@ -189,17 +194,32 @@ impl DrainParser {
         (matches as f32) / (log_tokens.len() as f32)
     }
 
-    fn generalize_template(&mut self, template_id: Uuid, log_tokens: &[InternedString], _raw_message_for_grokking: &str) -> Vec<ParameterValue> {
-        let template = self.templates.get_mut(&template_id).expect("Template ID not found during generalization");
+    fn generalize_template(
+        &mut self,
+        template_id: Uuid,
+        log_tokens: &[InternedString],
+        _raw_message_for_grokking: &str,
+    ) -> Vec<ParameterValue> {
+        let template = self
+            .templates
+            .get_mut(&template_id)
+            .expect("Template ID not found during generalization");
         let mut extracted_parameters: Vec<ParameterValue> = Vec::new();
         let mut param_idx = 0;
 
         for i in 0..template.tokens.len() {
             let log_token_interned = log_tokens[i];
-            let log_token_str = self.interner.resolve(log_token_interned).unwrap_or_default().to_string();
+            let log_token_str = self
+                .interner
+                .resolve(log_token_interned)
+                .unwrap_or_default()
+                .to_string();
 
             match &mut template.tokens[i] {
-                TemplateToken::Wildcard { name: _, type_hint: _ } => {
+                TemplateToken::Wildcard {
+                    name: _,
+                    type_hint: _,
+                } => {
                     // For existing wildcards, just extract the value.
                     // Type hint could be used here if we refine parameter extraction for existing wildcards.
                     extracted_parameters.push(ParameterValue::String(log_token_str));
@@ -251,12 +271,19 @@ impl DrainParser {
         extracted_parameters
     }
 
-    fn create_template_from_tokens(&self, log_tokens: &[InternedString], interner: &StringInterner<string_interner::backend::BucketBackend>) -> LogTemplate {
+    fn create_template_from_tokens(
+        &self,
+        log_tokens: &[InternedString],
+        interner: &StringInterner<string_interner::backend::BucketBackend>,
+    ) -> LogTemplate {
         let new_id = Uuid::new_v4();
         let template_tokens = log_tokens
             .iter()
             .map(|&interned_token| {
-                let token_str = interner.resolve(interned_token).unwrap_or_default().to_string();
+                let token_str = interner
+                    .resolve(interned_token)
+                    .unwrap_or_default()
+                    .to_string();
                 TemplateToken::Literal(token_str)
             })
             .collect();
@@ -279,7 +306,10 @@ impl DrainParser {
         let mut current_node = len_root_node;
         for i in 0..std::cmp::min(tokens.len(), self.max_depth) {
             let token_id = tokens[i];
-            current_node = current_node.children.entry(token_id).or_insert_with(|| DrainNode::new(i + 1));
+            current_node = current_node
+                .children
+                .entry(token_id)
+                .or_insert_with(|| DrainNode::new(i + 1));
         }
         // current_node is now the leaf node for this log's prefix
 
@@ -336,12 +366,15 @@ impl DrainParser {
             }
             node_to_add_template.template_ids.push(new_template_id);
 
-
             // For a new template, parameters are the literal string values of tokens.
             let parameters: Vec<ParameterValue> = tokens
                 .iter()
                 .map(|&interned_token| {
-                    let token_str = self.interner.resolve(interned_token).unwrap_or_default().to_string();
+                    let token_str = self
+                        .interner
+                        .resolve(interned_token)
+                        .unwrap_or_default()
+                        .to_string();
                     ParameterValue::String(token_str)
                 })
                 .collect();

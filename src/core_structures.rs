@@ -51,8 +51,8 @@ pub enum TemplateToken {
 pub struct LogTemplate {
     pub id: Uuid, // Unique identifier for this template
     pub tokens: Vec<TemplateToken>, // The sequence of tokens forming the template
-    // Optional: could store an example raw string that generated this template
-    // pub example_raw_string: Option<String>,
-    // Optional: could store the number of times this template has been seen
-    // pub occurrence_count: u64,
+                  // Optional: could store an example raw string that generated this template
+                  // pub example_raw_string: Option<String>,
+                  // Optional: could store the number of times this template has been seen
+                  // pub occurrence_count: u64,
 }
