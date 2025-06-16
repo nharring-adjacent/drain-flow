@@ -6,11 +6,11 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet; // Keep for now, not used by Vec<String>
+use std::cmp::Ordering;
+
+use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
 use uuid::Uuid;
-use std::hash::{Hash, Hasher};
-use std::cmp::Ordering;
 
 /// Wrapper for `f64` to implement `Eq`, `Ord`, and `Hash`.
 /// This is necessary because standard `f64` does not provide a total order
@@ -18,11 +18,12 @@ use std::cmp::Ordering;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, PartialOrd)]
 pub struct FloatWrapper(
     /// The wrapped `f64` value.
-    pub f64
+    pub f64,
 );
 
 impl Eq for FloatWrapper {}
 
+#[allow(clippy::derive_ord_xor_partial_ord)]
 impl Ord for FloatWrapper {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0.partial_cmp(&other.0).unwrap_or_else(|| {
@@ -108,7 +109,7 @@ pub enum TemplateToken {
         /// A generated name for the wildcard (e.g., "param0", "ip_address_1").
         name: String,
         /// A hint about the expected data type of this wildcard (e.g., "String", "Base10Integer").
-        type_hint: String
+        type_hint: String,
     },
 }
 
