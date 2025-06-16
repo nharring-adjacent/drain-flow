@@ -25,9 +25,9 @@ pub trait StringInternerTrait {
     /// * `symbol`: The interned symbol or reference.
     ///
     /// # Returns
-    /// The original string slice corresponding to the symbol.
-    /// For "no interning" with `String` as symbol, it might return `&symbol`.
-    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str;
+    /// An owned [`String`] containing the original value corresponding to the
+    /// symbol.
+    fn resolve(&self, symbol: &Self::Symbol) -> String;
 }
 
 use crate::drains::simple::INTERNER as SHARED_INTERNER; // Access the global interner
@@ -72,86 +72,12 @@ impl StringInternerTrait for SharedStringInterner {
         self.interner_arc.write().get_or_intern(s)
     }
 
-    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
-        // Acquire the read lock to resolve.
-        // This is tricky because the StringInterner.resolve method returns a &str
-        // that is tied to the lifetime of the &StringInterner, which is itself
-        // behind an RwLockReadGuard. We cannot return a reference that outlives the guard.
-        // This is a common issue with trying to wrap interners that return temporary refs.
-        //
-        // For a benchmark, one option is to make resolve return String.
-        // Or, for this specific case where resolve is mostly for verification/debug,
-        // and the benchmark focuses on `intern`, we might accept a limitation or
-        // use unsafe code if we were sure about lifetimes (but let's avoid unsafe).
-        //
-        // A practical solution for benchmarking might be that `resolve` is not called
-        // in the hot loop of the benchmark, or it returns an owned string.
-        // Let's try to make it work by ensuring the returned str is from a stable location
-        // that the guard protects. The string data is owned by the interner's allocator.
-        //
-        // The problem:
-        // let guard = self.interner_arc.read();
-        // guard.resolve(*symbol).expect("Symbol should exist") // This returns a &str tied to `guard`
-        //
-        // This will require careful handling. A common pattern is to use a crate like `owning_ref`
-        // or to accept that `resolve` might be less performant or return `String`.
-        //
-        // Given the constraints and the goal (benchmarking `intern`), let's make `resolve`
-        // also acquire the lock and return a string slice. The lifetime 'a will be tied
-        // to the lifetime of `&'a self` and `&'a Self::Symbol`.
-        // The `string-interner::StringInterner`'s `resolve` method itself returns `Option<&str>`.
-        // The lifetime of the returned `&str` is tied to the `&self` of the `resolve` call,
-        // which is the `StringInterner` instance.
-        //
-        // This means we need a way to hold the RwLockReadGuard and return a reference tied to it.
-        // This is not directly possible if `resolve` must return `&'a str` where `'a` is tied to `&'a self`.
-        //
-        // Workaround for the benchmark:
-        // The simplest way to satisfy the trait's current signature for `resolve`
-        // and avoid lifetime issues with the lock guard is to leak the string or use a static buffer.
-        // Leaking is bad. A static buffer is also not great.
-        //
-        // Let's reconsider the `resolve` signature or its usage in the benchmark.
-        // If `resolve` is primarily for setup/verification, we could have it return `String`.
-        //
-        // For now, to make it compile and be usable, we can temporarily use a method that
-        // might not be ideal for high-performance resolve, but works.
-        // The string_interner stores strings in a backend. When resolve is called,
-        // it provides a reference to that stored string. The guard must be held.
-        //
-        // A simple (but potentially problematic if the string is immediately dropped) way:
-        // This is UNSAFE if the guard is dropped and the &str is still used.
-        // To do this safely, resolve would need to return something like `OwningRef<RwLockReadGuard<...>, str>`.
-        //
-        // Let's make a simplifying assumption for the benchmark: `resolve` is not on the critical path.
-        // We can clone the string and leak it, returning a 'static str. This is bad practice generally
-        // but unblocks for the benchmark trait.
-        // A better approach for the trait would be for resolve to take `&'a self` and return `Cow<'a, str>`
-        // or for the benchmark to accept that `resolve` might allocate.
-        //
-        // Given the current trait: `fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str;`
-        // This implies the returned `&str` lives as long as `self` or `symbol`.
-        // This is possible if `Self::Symbol` itself contains the `&str` or `String`.
-        // But `DefaultSymbol` is usually a number.
-        //
-        // The most straightforward way to fulfill the trait for `string-interner`
-        // is to recognize that the `resolve` method of the `StringInterner` object
-        // returns a `&str` whose lifetime is tied to the `StringInterner` instance itself
-        // (because the strings are stored within it).
-        // So, if we hold a read lock, the reference is valid as long as the lock is held.
-        // The issue is returning that reference *outside* the scope of the lock.
-        //
-        // This is a fundamental challenge with this trait signature for `resolve`.
-        // Let's try to return a string that is effectively 'static by leaking memory.
-        // This is ONLY for the benchmark context to satisfy the trait.
-        // **This is generally a bad idea for production code.**
+    fn resolve(&self, symbol: &Self::Symbol) -> String {
         let guard = self.interner_arc.read();
-        let resolved_str = guard
+        guard
             .resolve(*symbol)
-            .expect("Symbol should exist in interner");
-        // "Leak" the string to get a 'static reference.
-        // This is not truly 'a, but 'static. It will satisfy the compiler for 'a.
-        Box::leak(resolved_str.to_string().into_boxed_str())
+            .expect("Symbol should exist in interner")
+            .to_owned()
     }
 }
 
@@ -183,10 +109,8 @@ impl StringInternerTrait for LassoInterner {
         self.interner.get_or_intern(s)
     }
 
-    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
-        // Rodeo's resolve method returns &'a str where 'a is tied to &self.interner
-        // This matches the trait signature's requirement if we consider 'a to be tied to &'a self.
-        self.interner.resolve(symbol)
+    fn resolve(&self, symbol: &Self::Symbol) -> String {
+        self.interner.resolve(symbol).to_string()
     }
 }
 
@@ -288,15 +212,12 @@ impl StringInternerTrait for ArcStringInternerImplInterner {
         self.interner.get_or_intern(s.to_string())
     }
 
-    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
-        // resolve(symbol: S) -> Option<Arc<T>> where T is str by default for arc_string_interner
+    fn resolve(&self, symbol: &Self::Symbol) -> String {
         let arc_str_val: Arc<str> = self
             .interner
             .resolve(*symbol)
             .expect("Symbol should exist in interner");
-        // To use into_boxed_str() for Box::leak, we need a String.
-        let owned_string: String = arc_str_val.to_string();
-        Box::leak(owned_string.into_boxed_str())
+        arc_str_val.to_string()
     }
 }
 
@@ -332,11 +253,8 @@ impl StringInternerTrait for NoInterningBaseline {
         s.to_string()
     }
 
-    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
-        // The "symbol" is the string itself, so we just return a reference to it.
-        // The lifetime 'a is tied to the input 'a Self::Symbol, which is &'a String.
-        // So returning &'a str (from &'a String) is valid.
-        symbol.as_str()
+    fn resolve(&self, symbol: &Self::Symbol) -> String {
+        symbol.clone()
     }
 }
 
@@ -366,12 +284,11 @@ impl StringInternerTrait for StringBackendInterner {
         self.interner.get_or_intern(s)
     }
 
-    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
-        let resolved_str = self
-            .interner
+    fn resolve(&self, symbol: &Self::Symbol) -> String {
+        self.interner
             .resolve(*symbol)
-            .expect("Symbol should exist in interner");
-        Box::leak(resolved_str.to_string().into_boxed_str())
+            .expect("Symbol should exist in interner")
+            .to_owned()
     }
 }
 
@@ -401,12 +318,11 @@ impl StringInternerTrait for BucketBackendInterner {
         self.interner.get_or_intern(s)
     }
 
-    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
-        let resolved_str = self
-            .interner
+    fn resolve(&self, symbol: &Self::Symbol) -> String {
+        self.interner
             .resolve(*symbol)
-            .expect("Symbol should exist in interner");
-        Box::leak(resolved_str.to_string().into_boxed_str())
+            .expect("Symbol should exist in interner")
+            .to_owned()
     }
 }
 
@@ -436,11 +352,10 @@ impl StringInternerTrait for BufferBackendInterner {
         self.interner.get_or_intern(s)
     }
 
-    fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
-        let resolved_str = self
-            .interner
+    fn resolve(&self, symbol: &Self::Symbol) -> String {
+        self.interner
             .resolve(*symbol)
-            .expect("Symbol should exist in interner");
-        Box::leak(resolved_str.to_string().into_boxed_str())
+            .expect("Symbol should exist in interner")
+            .to_owned()
     }
 }
