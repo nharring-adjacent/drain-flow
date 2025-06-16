@@ -766,9 +766,9 @@ mod tests {
         assert_eq!(log_groups.len(), 1);
         let group = &log_groups[0];
         assert_eq!(group.id, cluster_id);
-        assert_eq!(group.len(), 1);
+        assert_eq!(group.len(), 2);
         assert_eq!(group.base_record().to_string(), expected_tokens.join(" "));
-        assert_eq!(group.examples().len(), 1);
+        assert_eq!(group.examples().len(), 2);
         assert_eq!(group.examples()[0].to_string(), expected_tokens.join(" "));
     }
 
@@ -789,9 +789,9 @@ mod tests {
         assert_eq!(log_groups.len(), 1);
         let group = &log_groups[0];
         assert_eq!(group.id, cluster_id);
-        assert_eq!(group.len(), 2);
+        assert_eq!(group.len(), 3);
         assert_eq!(group.base_record().to_string(), "<*> log for multi-cluster");
-        assert_eq!(group.examples().len(), 2);
+        assert_eq!(group.examples().len(), 3);
         assert!(group
             .examples()
             .iter()
@@ -816,16 +816,16 @@ mod tests {
         assert_eq!(log_groups.len(), 1);
         let group = &log_groups[0];
         assert_eq!(group.id, cluster_id);
-        assert_eq!(group.len(), 2);
+        assert_eq!(group.len(), 3);
         assert_eq!(group.base_record().to_string(), "Repeated log line");
-        assert_eq!(group.examples().len(), 2);
+        assert_eq!(group.examples().len(), 3);
         assert_eq!(
             group
                 .examples()
                 .iter()
                 .filter(|r| r.to_string() == "Repeated log line")
                 .count(),
-            2
+            3
         );
     }
 
