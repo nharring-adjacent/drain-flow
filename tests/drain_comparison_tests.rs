@@ -90,7 +90,7 @@ mod comparative_tests {
             );
             assert_eq!(
                 dd_groups[0].len(),
-                3,
+                4,
                 "DifferentialDrain: Count mismatch for scenario 1"
             );
         }
@@ -182,7 +182,7 @@ mod comparative_tests {
             );
             assert_eq!(
                 dd_groups[0].len(),
-                5,
+                6,
                 "DifferentialDrain: Count mismatch for scenario 2"
             );
         }

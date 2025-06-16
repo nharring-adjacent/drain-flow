@@ -692,8 +692,7 @@ mod tests {
 
             for group in &log_groups_vec { // Use log_groups_vec here
                 if selected_group_ids_set.contains(&group.id) {
-                    let mut records_to_check = group.examples().clone();
-                    records_to_check.push(group.base_record().clone());
+                    let records_to_check = group.examples().clone();
                     for original_record in records_to_check {
                         let matches_filter = query.filter.as_ref().is_none_or(|f| original_record.to_string().contains(&f.contains));
                         if matches_filter {
