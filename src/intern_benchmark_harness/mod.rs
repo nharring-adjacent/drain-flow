@@ -39,9 +39,8 @@ use string_interner::DefaultSymbol;
 use string_interner::StringInterner; // Import RandomState
 
 // New crates for benchmarking
+use interned_string::{IString, Intern};
 use lasso::{Rodeo, Spur};
-// For interned-string v0.2.0, use IString
-// use interned_string::IString as InternedIString; // Alias to avoid confusion if IString is too generic
 // For intern_string v0.1.0, use Intern and InternId
 // use intern_string::{Intern as InternStringIntern, InternId as InternStringInternId};
 // For arc-string-interner
@@ -114,35 +113,32 @@ impl StringInternerTrait for LassoInterner {
     }
 }
 
-// 2. InternedString Interner (using interned_string::IString for v0.2.0) - COMMENTED OUT DUE TO COMPILATION ISSUES
-// pub struct InternedStringInterner {
-//     _marker: std::marker::PhantomData<()>,
-// }
-//
-// impl InternedStringInterner {
-//     pub fn new() -> Self {
-//         Self { _marker: std::marker::PhantomData }
-//     }
-// }
-//
-// impl Default for InternedStringInterner {
-//     fn default() -> Self {
-//         Self::new()
-//     }
-// }
-//
-// impl StringInternerTrait for InternedStringInterner {
-//     type Symbol = InternedIString;
-//
-//     fn intern(&mut self, s: &str) -> Self::Symbol {
-//         // This was failing with E0425: cannot find function `intern` in crate `interned_string`
-//         interned_string::intern(s)
-//     }
-//
-//     fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
-//         symbol.as_ref()
-//     }
-// }
+// 2. InternedString Interner (using interned_string::IString)
+pub struct InternedStringInterner;
+
+impl InternedStringInterner {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for InternedStringInterner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StringInternerTrait for InternedStringInterner {
+    type Symbol = IString;
+
+    fn intern(&mut self, s: &str) -> Self::Symbol {
+        s.intern()
+    }
+
+    fn resolve(&self, symbol: &Self::Symbol) -> String {
+        symbol.as_ref().to_string()
+    }
+}
 
 // 3. intern-string Interner (using intern_string::Intern and InternId for v0.1.0) - COMMENTED OUT DUE TO COMPILATION ISSUES
 // pub struct InternStringImplInterner {
