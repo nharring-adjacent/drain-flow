@@ -267,7 +267,7 @@ pub struct ArcStringInternerImplInterner {
 impl ArcStringInternerImplInterner {
     pub fn new() -> Self {
         Self {
-            interner: ArcStringInternerImpl::new(), // This will create StringInterner<Sym, RandomState, 0>
+            interner: ArcStringInternerImpl::with_capacity(1024), // This will create StringInterner<Sym, RandomState, 0>
         }
     }
 }
