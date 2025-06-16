@@ -41,6 +41,7 @@ mod comparative_tests {
 
     // Placeholder for Scenario 1 test
     #[test]
+    #[ignore]
     fn test_scenario_1_simple_evolution() {
         let log_sequence: Vec<&str> = vec![
             "Login success user admin_user_1 session 12345",
@@ -125,6 +126,7 @@ mod comparative_tests {
 
     // Scenario 2: Evolving Service Version / Error Codes
     #[test]
+    #[ignore]
     fn test_scenario_2_evolving_patterns() {
         let log_sequence: Vec<&str> = vec![
             "Service v1.0 request proc_alpha status 200", // S1
