@@ -28,8 +28,8 @@ string-interner = { version = "0.19.0" }
 tracing = "0.1.36"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.85"
-differential-dataflow = "0.12"
-timely = "0.12"
+differential-dataflow = { version = "0.12", default-features = false }
+timely = { version = "0.12", features = ["bincode"] }
 lasso = "0.7.1"
 interned-string = "*"
 intern_string = "*"
