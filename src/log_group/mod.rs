@@ -38,10 +38,11 @@ impl fmt::Display for Wildcard {
 impl LogGroup {
     #[instrument(level = "trace", skip(event))]
     pub fn new(event: Record) -> Self {
+        let id = event.uid;
         Self {
-            id: event.uid,
+            id,
+            examples: vec![event.clone()],
             event,
-            examples: vec![],
             variables: HashMap::new(),
         }
     }
@@ -107,7 +108,7 @@ impl LogGroup {
         }
     }
 
-    /// Number of examples this [LogGroup] contains
+    /// Total number of records stored in this [LogGroup]
     #[instrument(level = "trace", skip_all)]
     pub fn len(&self) -> usize {
         self.examples.len()
