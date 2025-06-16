@@ -72,3 +72,4 @@ harness = false
 
 [features]
 intern_benchmark_harness = []
+verbose-tests = []
