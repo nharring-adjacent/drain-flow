@@ -15,7 +15,8 @@ fn get_template_string(group: &LogGroup) -> String {
 }
 
 // Helper to print groups for debugging
-#[allow(dead_code)] // Will be used in tests, but good to have for debugging even if not all paths use it.
+#[allow(dead_code)]
+#[cfg(feature = "verbose-tests")]
 fn print_groups_summary(drain_name: &str, groups: &[LogGroup]) {
     println!("\n---- {} ----", drain_name);
     println!("Total groups: {}", groups.len());
@@ -24,16 +25,16 @@ fn print_groups_summary(drain_name: &str, groups: &[LogGroup]) {
             "  Group {}: Count={}, Template='{}', ID={}",
             i,
             group.len(),
-            get_template_string(group), // Use helper
+            get_template_string(group),
             group.id
         );
-        // Optionally print a few samples
-        // for sample in group.examples().iter().take(2) {
-        //     println!("    Sample (ID {}): {}", sample.id, sample.content);
-        // }
     }
     println!("--------------------");
 }
+
+#[allow(dead_code)]
+#[cfg(not(feature = "verbose-tests"))]
+fn print_groups_summary(_drain_name: &str, _groups: &[LogGroup]) {}
 
 #[cfg(test)]
 mod comparative_tests {
