@@ -1258,6 +1258,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn test_calculate_similarity_len1_and_empty() {
         let msg_tokens_a = vec!["a".to_string()];
         let template_tokens_a = vec![TokenOrWildcard::Token("a".to_string())];
