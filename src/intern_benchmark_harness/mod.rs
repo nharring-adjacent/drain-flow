@@ -42,7 +42,7 @@ use string_interner::StringInterner; // Import RandomState
 use interned_string::{IString, Intern};
 use lasso::{Rodeo, Spur};
 // For intern_string v0.1.0, use Intern and InternId
-// use intern_string::{Intern as InternStringIntern, InternId as InternStringInternId};
+use intern_string::{Intern as InternStringIntern, InternId as InternStringInternId};
 // For arc-string-interner
 use arc_string_interner::StringInterner as ArcStringInternerImpl;
 use arc_string_interner::Sym as ArcSym;
@@ -140,39 +140,36 @@ impl StringInternerTrait for InternedStringInterner {
     }
 }
 
-// 3. intern-string Interner (using intern_string::Intern and InternId for v0.1.0) - COMMENTED OUT DUE TO COMPILATION ISSUES
-// pub struct InternStringImplInterner {
-//     interner: InternStringIntern,
-// }
-//
-// impl InternStringImplInterner {
-//     pub fn new() -> Self {
-//         Self {
-//             interner: InternStringIntern::new(),
-//         }
-//     }
-// }
-//
-// impl Default for InternStringImplInterner {
-//     fn default() -> Self {
-//         Self::new()
-//     }
-// }
-//
-// impl StringInternerTrait for InternStringImplInterner {
-//     type Symbol = InternStringInternId;
-//
-//     fn intern(&mut self, s: &str) -> Self::Symbol {
-//         self.interner.intern(s)
-//     }
-//
-//     fn resolve<'a>(&'a self, symbol: &'a Self::Symbol) -> &'a str {
-//         // This was failing with E0599: no method named `resolve` found (or `get`)
-//         let resolved_str = self.interner.resolve(*symbol)
-//             .expect("Symbol should exist in interner");
-//         Box::leak(resolved_str.to_string().into_boxed_str())
-//     }
-// }
+// 3. intern-string Interner (using intern_string::Intern and InternId)
+pub struct InternStringImplInterner {
+    interner: InternStringIntern<'static>,
+}
+
+impl InternStringImplInterner {
+    pub fn new() -> Self {
+        Self {
+            interner: InternStringIntern::new(),
+        }
+    }
+}
+
+impl Default for InternStringImplInterner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StringInternerTrait for InternStringImplInterner {
+    type Symbol = InternStringInternId;
+
+    fn intern(&mut self, s: &str) -> Self::Symbol {
+        self.interner.intern(s)
+    }
+
+    fn resolve(&self, symbol: &Self::Symbol) -> String {
+        self.interner.lookup(*symbol).to_string()
+    }
+}
 
 // 4. ArcStringInterner Interner
 pub struct ArcStringInternerImplInterner {
