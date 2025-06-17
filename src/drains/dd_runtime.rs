@@ -9,10 +9,14 @@
 
 use crate::drains::dd_types::{LogTemplate, RawLog, TokenizedLog};
 use differential_dataflow::input::InputSession;
-use differential_dataflow::operators::{Consolidate, Iterate, Join, Reduce, Threshold, Group, Antijoin, Concat};
-use differential_dataflow::Collection;
+// Group, Antijoin, and Concat are typically used as trait methods on Collection objects
+// and may not need to be (or cannot be) imported directly from this path.
+// Other specific modules like `differential_dataflow::operators::set::Antijoin` exist if needed,
+// but the methods themselves are usually brought in by `use differential_dataflow::operators::*;` or traits.
+use differential_dataflow::operators::{Consolidate, Iterate, Join, Reduce, Threshold};
+use differential_dataflow::Collection; // Required for .concat(), .antijoin(), .group() trait methods
 use lazy_static::lazy_static;
-use lasso::{Rodeo, Spur, ThreadedRodeo};
+use lasso::{Rodeo, Spur, ThreadedRodeo}; // Ensure ThreadedRodeo is imported
 use regex::Regex;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
@@ -65,13 +69,13 @@ pub struct DifferentialDrainRuntime {
 impl DifferentialDrainRuntime {
     pub fn new() -> Result<Self, String> {
         // Initialize a string interner (Lasso's ThreadedRodeo) wrapped in an Arc for shared access.
-        let initial_lasso_interner = Arc::new(ThreadedRodeo::default());
+        let initial_lasso_interner: Arc<ThreadedRodeo> = Arc::new(ThreadedRodeo::default());
         // Create channels to send dataflow handles from the timely worker thread to the main thread.
         let (input_handle_sender, input_handle_receiver) = channel();
         let (probe_sender, probe_receiver) = channel();
 
         // Clone the interner Arc for the new timely worker thread.
-        let interner_for_thread = Arc::clone(&initial_lasso_interner);
+        let interner_for_thread: Arc<ThreadedRodeo> = Arc::clone(&initial_lasso_interner);
 
         // Spawn a new thread to host the Timely Dataflow computation.
         std::thread::spawn(move || {
@@ -81,7 +85,7 @@ impl DifferentialDrainRuntime {
                 // Clone the interner Arc again for the dataflow construction closure.
                 // This interner (`interner_for_dataflow`) will be moved into the main dataflow scope
                 // and subsequently cloned for specific operators needing access to it.
-                let interner_for_dataflow = Arc::clone(&interner_for_thread);
+                let interner_for_dataflow: Arc<ThreadedRodeo> = Arc::clone(&interner_for_thread);
 
                 // Define the dataflow graph.
                 let (input_h, probe_h) = worker.dataflow(move |scope| {
@@ -92,7 +96,7 @@ impl DifferentialDrainRuntime {
                     let (input_handle, stream) = scope.new_input::<RawLog>();
 
                     // Clone the interner for the tokenization map operation.
-                    let interner_for_map = Arc::clone(&interner_for_dataflow);
+                    let interner_for_map: Arc<ThreadedRodeo> = Arc::clone(&interner_for_dataflow);
                     // Map RawLog messages to TokenizedLog messages.
                     // This involves tokenizing the log text and assigning a unique ID.
                     let tokenized_logs = stream.map(move |raw_log: RawLog| {
@@ -146,7 +150,8 @@ impl DifferentialDrainRuntime {
                         // `SIMILARITY_THRESHOLD` determines how similar a log must be to a template to be considered a match.
                         const SIMILARITY_THRESHOLD: f64 = 0.6;
                         // Clone interner for use in the similarity calculation closure.
-                        let interner_for_similarity = Arc::clone(&interner_for_dataflow);
+                        // `interner_for_dataflow` (moved into `iterative` scope) is cloned here.
+                        let interner_for_similarity: Arc<ThreadedRodeo> = Arc::clone(&interner_for_dataflow);
 
                         // `flat_map` processes each (log, template) pair to calculate a similarity score.
                         // If the score is above the threshold, it emits `(log_original_id, (template_id, score_as_u32))`.
@@ -210,7 +215,8 @@ impl DifferentialDrainRuntime {
                         // Collection<_, (template_id, TokenizedLog, LogTemplate)>
 
                         // Clone interner for the generalization group closure.
-                        let interner_for_generalization = Arc::clone(&interner_for_dataflow);
+                        // `interner_for_dataflow` (moved into `iterative` scope) is cloned here.
+                        let interner_for_generalization: Arc<ThreadedRodeo> = Arc::clone(&interner_for_dataflow);
                         // Group by `template_id` to generalize each template with all logs that matched it.
                         let updated_templates = data_for_grouping
                             .map(|(template_id, log, original_template)|
