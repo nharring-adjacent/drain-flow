@@ -1,14 +1,6 @@
-// Copyright Materialize, Inc. All rights reserved.
-//
-// Use of this software is governed by the Business Source License
-// included in the LICENSE file at the root of this repository.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0.
-
 use crate::drains::dd_types::{LogTemplate, RawLog, TokenizedLog};
-use differential_dataflow::input::InputSession;
+use chrono::Duration;
+// use differential_dataflow::input::InputSession;
 // Group, Antijoin, and Concat are typically used as trait methods on Collection objects
 // and may not need to be (or cannot be) imported directly from this path.
 // Other specific modules like `differential_dataflow::operators::set::Antijoin` exist if needed,
@@ -16,20 +8,19 @@ use differential_dataflow::input::InputSession;
 use differential_dataflow::operators::{Consolidate, Iterate, Join, Reduce, Threshold};
 use differential_dataflow::Collection; // Required for .concat(), .antijoin(), .group() trait methods
 use lazy_static::lazy_static;
-use lasso::{Rodeo, Spur, ThreadedRodeo}; // Ensure ThreadedRodeo is imported
+use lasso::{Spur, ThreadedRodeo}; // Ensure ThreadedRodeo is imported
 use regex::Regex;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
-use timely::dataflow::operators::{Input, Map, Probe};
+use timely::dataflow::operators::{Concat, Enter, Input, Leave, LoopVariable, Map, Probe};
 use timely::dataflow::operators::input::Handle;
 use timely::dataflow::scopes::Scope;
 use timely::dataflow::ProbeHandle;
-use timely::execute;
+// use timely::execute;
 use timely::order::Product;
-use timely::progress::Timestamp;
+// use timely::progress::Timestamp;
 use uuid::Uuid;
 
-use mz_arch::Runtime;
 
 /// WILDCARD_STR is a constant string used to represent a wildcard token in log templates.
 const WILDCARD_STR: &str = "<*>";
@@ -61,8 +52,8 @@ fn tokenize_log_line(line: &str, interner: &ThreadedRodeo) -> Vec<Spur> {
 }
 
 pub struct DifferentialDrainRuntime {
-    input_handle: Option<Handle<Timestamp, RawLog>>,
-    probe: ProbeHandle<Timestamp>,
+    input_handle: Option<Handle<timely::order::Product<Duration, u64>, RawLog>>,
+    probe: ProbeHandle<timely::order::Product<Duration, u64>>,
     lasso_interner: Arc<ThreadedRodeo>,
 }
 
@@ -81,7 +72,7 @@ impl DifferentialDrainRuntime {
         std::thread::spawn(move || {
             // Execute a Timely Dataflow computation.
             // `timely::Configuration::Thread` indicates a single-worker execution.
-            if let Err(e) = timely::execute::execute(timely::Configuration::Thread, move |worker| {
+            if let Err(e) = timely::execute::execute(timely::execute::Config::thread(), move |worker| {
                 // Clone the interner Arc again for the dataflow construction closure.
                 // This interner (`interner_for_dataflow`) will be moved into the main dataflow scope
                 // and subsequently cloned for specific operators needing access to it.
@@ -100,7 +91,7 @@ impl DifferentialDrainRuntime {
                     // Map RawLog messages to TokenizedLog messages.
                     // This involves tokenizing the log text and assigning a unique ID.
                     let tokenized_logs = stream.map(move |raw_log: RawLog| {
-                        let tokens = tokenize_log_line(&raw_log.text, &interner_for_map);
+                        let tokens = tokenize_log_line(&raw_log.content, &interner_for_map);
                         let token_count = tokens.len();
                         TokenizedLog {
                             original_id: Uuid::new_v4(), // Assign a unique ID for tracking this specific log instance.
@@ -117,7 +108,7 @@ impl DifferentialDrainRuntime {
                         // Bring the stream of tokenized logs into the iterative scope.
                         let unclustered_initial = tokenized_logs.enter(inner_scope);
                         // Initialize an empty collection for log templates at the beginning of the first iteration.
-                        let templates_initial = Collection::<_, LogTemplate>::empty(inner_scope);
+                        let templates_initial = Collection::<_, LogTemplate>::new(inner_scope);
 
                         // Define loop variables for templates and unclustered logs.
                         // `templates_handle` sends data back into the `templates_stream` for the next iteration.
@@ -292,9 +283,12 @@ impl DifferentialDrainRuntime {
 
                         // Feed the combined templates back into the `templates` loop variable.
                         // `consolidate()` ensures that multiplicities are correctly handled for diffs.
-                        templates_handle.set(next_iteration_templates.consolidate());
+                        let pinned_loop_handle = std::pin::pin!(templates_handle);
+                         pinned_loop_handle.set(next_iteration_templates.consolidate( ));
+                         
                         // Feed the logs that remained unmatched in this iteration back into the `unclustered_logs` loop variable.
-                        unclustered_handle.set(unmatched_logs_feedback.consolidate());
+                        let pinned_cluster_handle = std::pin::pin!(unclustered_handle);
+                        pinned_cluster_handle.set(unmatched_logs_feedback.consolidate());
 
                         // Output of the iterative scope:
                         // `templates.leave()`: The full collection of templates accumulated over all iterations.
