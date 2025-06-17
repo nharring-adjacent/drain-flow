@@ -9,18 +9,25 @@ use std::sync::{mpsc, Arc, Mutex};
 use timely::dataflow::operators::Inspect;
 use uuid::Uuid;
 
+pub enum WorkerMessage {
+    Log(usize, RawLogEntry),
+    AdvanceTo(usize),
+    Terminate,
+}
+
 pub struct LogProcessingEngine {
     worker_thread_handle: Option<std::thread::JoinHandle<()>>, // To keep the worker alive
-    log_sender: mpsc::Sender<Option<RawLogEntry>>, // Channel for sending logs to the worker
-                                                   // Collections that can be inspected (will require more sophisticated query mechanisms later)
-                                                   // These are placeholders to show intent; actual querying will be more complex.
-                                                   // For now, we might not store Arc<Mutex<Collection>> directly but build them in the dataflow.
-                                                   // The ability to query them will come from dataflow probes or specific arrangements.
+    log_sender: mpsc::Sender<WorkerMessage>, // Channel for sending logs to the worker
+    current_time: usize,
+    // Collections that can be inspected (will require more sophisticated query mechanisms later)
+    // These are placeholders to show intent; actual querying will be more complex.
+    // For now, we might not store Arc<Mutex<Collection>> directly but build them in the dataflow.
+    // The ability to query them will come from dataflow probes or specific arrangements.
 }
 
 impl LogProcessingEngine {
     pub fn new() -> Self {
-        let (sender, receiver) = mpsc::channel::<Option<RawLogEntry>>();
+        let (sender, receiver) = mpsc::channel::<WorkerMessage>();
         let receiver = Arc::new(Mutex::new(receiver));
         let receiver_handle = receiver.clone();
 
@@ -130,18 +137,21 @@ impl LogProcessingEngine {
                     });
                 });
 
-                let mut time = 0usize;
                 loop {
                     let msg = receiver_handle.lock().unwrap().recv();
                     match msg {
-                        Ok(Some(raw_log)) => {
-                            input_session.update_at(raw_log, time, 1);
-                            time += 1;
-                            input_session.advance_to(time);
+                        Ok(WorkerMessage::Log(ts, raw_log)) => {
+                            input_session.update_at(raw_log, ts, 1);
+                            input_session.advance_to(ts + 1);
                             input_session.flush();
                             worker.step();
                         }
-                        Ok(None) | Err(_) => break,
+                        Ok(WorkerMessage::AdvanceTo(t)) => {
+                            input_session.advance_to(t);
+                            input_session.flush();
+                            worker.step();
+                        }
+                        Ok(WorkerMessage::Terminate) | Err(_) => break,
                     }
                 }
             })
@@ -151,12 +161,23 @@ impl LogProcessingEngine {
         Self {
             worker_thread_handle: Some(worker_thread_handle),
             log_sender: sender,
+            current_time: 0,
         }
     }
 
-    pub fn ingest_raw_log(&self, raw_log: RawLogEntry) {
-        // Send the log entry to the worker thread. Ignore errors during shutdown.
-        let _ = self.log_sender.send(Some(raw_log));
+    pub fn ingest_raw_log(&mut self, raw_log: RawLogEntry) {
+        let time = self.current_time;
+        self.current_time += 1;
+        // Send the log entry to the worker thread with its logical time.
+        let _ = self.log_sender.send(WorkerMessage::Log(time, raw_log));
+    }
+
+    /// Manually advance the logical clock without ingesting a log entry.
+    pub fn advance_time(&mut self) {
+        self.current_time += 1;
+        let _ = self
+            .log_sender
+            .send(WorkerMessage::AdvanceTo(self.current_time));
     }
 
     // Placeholder for direct query (will be replaced by proper dataflow queries)
@@ -175,7 +196,7 @@ impl Default for LogProcessingEngine {
 impl Drop for LogProcessingEngine {
     fn drop(&mut self) {
         // Signal the worker thread to finish and join it.
-        let _ = self.log_sender.send(None);
+        let _ = self.log_sender.send(WorkerMessage::Terminate);
         if let Some(handle) = self.worker_thread_handle.take() {
             handle.join().expect("Failed to join timely worker thread.");
         }

@@ -349,6 +349,7 @@ impl DrainParser {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::useless_vec)]
     use super::*;
     use crate::core_structures::{ParameterValue, RawLogEntry, TemplateToken};
     use chrono::Utc;

@@ -15,9 +15,9 @@ extern crate enum_derive;
 
 pub mod core_structures;
 pub mod drain_parser;
-mod drains;
+pub mod drains;
 pub mod intern_benchmark_harness;
-mod log_group;
+pub mod log_group;
 pub mod record;
 pub mod runtime;
 
