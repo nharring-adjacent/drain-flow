@@ -1,4 +1,3 @@
-pub mod dd_types;
 //! # Log Processing Drains
 //!
 //! This module provides mechanisms for processing, clustering, and managing log data.
@@ -9,6 +8,7 @@ pub mod dd_types;
 //!
 //! The primary purpose of this module is to abstract the specifics of log processing,
 //! allowing other parts of the system to interact with log data through a consistent API.
+pub mod dd_types;
 
 // Copyright Nicholas Harring. All rights reserved.
 //
