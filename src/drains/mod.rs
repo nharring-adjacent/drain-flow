@@ -1,3 +1,4 @@
+pub mod dd_types;
 //! # Log Processing Drains
 //!
 //! This module provides mechanisms for processing, clustering, and managing log data.
