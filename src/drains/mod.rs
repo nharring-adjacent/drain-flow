@@ -21,7 +21,9 @@ pub mod dd_types;
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
 pub mod api;
+pub mod dd_runtime;
 pub mod differential_drain;
 pub mod simple;
 pub mod two_stage_drain;
+pub use dd_runtime::DifferentialDrainRuntime;
 pub use differential_drain::DifferentialDrain;
