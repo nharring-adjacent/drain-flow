@@ -7,20 +7,19 @@ use chrono::Duration;
 // but the methods themselves are usually brought in by `use differential_dataflow::operators::*;` or traits.
 use differential_dataflow::operators::{Consolidate, Iterate, Join, Reduce, Threshold};
 use differential_dataflow::Collection; // Required for .concat(), .antijoin(), .group() trait methods
-use lazy_static::lazy_static;
 use lasso::{Spur, ThreadedRodeo}; // Ensure ThreadedRodeo is imported
+use lazy_static::lazy_static;
 use regex::Regex;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
-use timely::dataflow::operators::{Concat, Enter, Input, Leave, LoopVariable, Map, Probe};
 use timely::dataflow::operators::input::Handle;
+use timely::dataflow::operators::{Concat, Enter, Input, Leave, LoopVariable, Map, Probe};
 use timely::dataflow::scopes::Scope;
 use timely::dataflow::ProbeHandle;
 // use timely::execute;
 use timely::order::Product;
 // use timely::progress::Timestamp;
 use uuid::Uuid;
-
 
 /// WILDCARD_STR is a constant string used to represent a wildcard token in log templates.
 const WILDCARD_STR: &str = "<*>";
@@ -72,14 +71,17 @@ impl DifferentialDrainRuntime {
         std::thread::spawn(move || {
             // Execute a Timely Dataflow computation.
             // `timely::Configuration::Thread` indicates a single-worker execution.
-            if let Err(e) = timely::execute::execute(timely::execute::Config::thread(), move |worker| {
-                // Clone the interner Arc again for the dataflow construction closure.
-                // This interner (`interner_for_dataflow`) will be moved into the main dataflow scope
-                // and subsequently cloned for specific operators needing access to it.
-                let interner_for_dataflow: Arc<ThreadedRodeo> = Arc::clone(&interner_for_thread);
+            if let Err(e) = timely::execute::execute(
+                timely::execute::Config::thread(),
+                move |worker| {
+                    // Clone the interner Arc again for the dataflow construction closure.
+                    // This interner (`interner_for_dataflow`) will be moved into the main dataflow scope
+                    // and subsequently cloned for specific operators needing access to it.
+                    let interner_for_dataflow: Arc<ThreadedRodeo> =
+                        Arc::clone(&interner_for_thread);
 
-                // Define the dataflow graph.
-                let (input_h, probe_h) = worker.dataflow(move |scope| {
+                    // Define the dataflow graph.
+                    let (input_h, probe_h) = worker.dataflow(move |scope| {
                     // === Input and Tokenization ===
                     // Create a new input stream for RawLog messages.
                     // `input_handle` is used to send data into the stream from outside the dataflow.
@@ -285,7 +287,7 @@ impl DifferentialDrainRuntime {
                         // `consolidate()` ensures that multiplicities are correctly handled for diffs.
                         let pinned_loop_handle = std::pin::pin!(templates_handle);
                          pinned_loop_handle.set(next_iteration_templates.consolidate( ));
-                         
+
                         // Feed the logs that remained unmatched in this iteration back into the `unclustered_logs` loop variable.
                         let pinned_cluster_handle = std::pin::pin!(unclustered_handle);
                         pinned_cluster_handle.set(unmatched_logs_feedback.consolidate());
@@ -301,14 +303,15 @@ impl DifferentialDrainRuntime {
                     (input_handle, final_probe) // Return input handle and probe handle to the caller of `worker.dataflow`.
                 });
 
-                // Send the handles out of the worker thread.
-                if input_handle_sender.send(input_h).is_err() {
-                    eprintln!("Failed to send input handle: receiver dropped");
-                }
-                if probe_sender.send(probe_h).is_err() {
-                    eprintln!("Failed to send probe handle: receiver dropped");
-                }
-            }) {
+                    // Send the handles out of the worker thread.
+                    if input_handle_sender.send(input_h).is_err() {
+                        eprintln!("Failed to send input handle: receiver dropped");
+                    }
+                    if probe_sender.send(probe_h).is_err() {
+                        eprintln!("Failed to send probe handle: receiver dropped");
+                    }
+                },
+            ) {
                 eprintln!("Timely worker execution failed: {:?}", e);
             }
         });
