@@ -5,9 +5,9 @@ use timely::dataflow::{operators::input::Handle, ProbeHandle};
 use timely::order::Product;
 
 use crate::drains::dd_runtime::build_dataflow_graph_and_get_handles;
+use chrono::Utc;
 use std::sync::mpsc;
-use timely::execute::{execute, Config};
-use chrono::Utc; // Added import
+use timely::execute::{execute, Config}; // Added import
 
 pub struct DrainFlowRuntime {
     worker: Option<thread::JoinHandle<()>>,
@@ -44,8 +44,12 @@ impl DrainFlowRuntime {
         });
 
         // Receive handles from the worker thread
-        let input_handle = input_rx.recv().map_err(|e| format!("Failed to receive input handle: {}", e))?;
-        let probe_handle = probe_rx.recv().map_err(|e| format!("Failed to receive probe handle: {}", e))?;
+        let input_handle = input_rx
+            .recv()
+            .map_err(|e| format!("Failed to receive input handle: {}", e))?;
+        let probe_handle = probe_rx
+            .recv()
+            .map_err(|e| format!("Failed to receive probe handle: {}", e))?;
 
         Ok(Self {
             worker: Some(worker_handle),
