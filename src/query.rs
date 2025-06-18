@@ -8,6 +8,8 @@
 // Server Side Public License along with this program.
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
+#![allow(deprecated)]
+
 //! # Log Querying System
 //!
 //! This module provides structures and functions for querying log data.

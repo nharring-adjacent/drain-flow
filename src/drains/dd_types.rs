@@ -1,34 +1,33 @@
-use chrono::{DateTime, Utc};
-use lasso::Spur;
+#![allow(non_local_definitions)]
+
+use abomonation_derive::Abomonation;
 use serde::{Deserialize, Serialize};
-use timely::order::Product;
-use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Abomonation, Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct RawLog {
+    pub id: usize,
     pub content: String,
-    // Original timestamp can be part of the dataflow timestamp
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Abomonation, Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct TokenizedLog {
-    pub original_id: Uuid, // A unique ID for traceability
-    pub tokens: Vec<Spur>,
+    pub original_id: usize,
+    pub tokens: Vec<String>,
     pub token_count: usize,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Abomonation, Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct LogTemplate {
-    pub template_id: Uuid,
+    pub template_id: usize,
     // A mix of concrete tokens and a special wildcard token
-    pub template_tokens: Vec<Spur>,
+    pub token_spurs: Vec<String>,
     pub token_count: usize,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Abomonation, Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct LogCluster {
-    pub template_id: Uuid,
-    pub template_tokens: Vec<Spur>,
+    pub template_id: usize,
+    pub token_spurs: Vec<String>,
     pub event_count: u64,
     // Include a few sample raw log lines for context
     pub samples: Vec<String>,

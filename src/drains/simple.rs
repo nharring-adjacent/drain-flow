@@ -8,6 +8,8 @@
 // Server Side Public License along with this program.
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
+#![allow(deprecated)]
+
 use std::{collections::HashMap, fmt, sync::Arc};
 
 use anyhow::{anyhow, Error};
