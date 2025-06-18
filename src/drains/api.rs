@@ -21,6 +21,7 @@ use anyhow::Error;
 /// This abstraction allows other parts of the system, like the `LogStore`,
 /// to operate on log data generically, without being coupled to a specific
 /// drain implementation.
+#[deprecated(note = "Replaced by the asynchronous DrainFlowRuntime")]
 pub trait Drain {
     /// Processes a single log line, potentially updating internal log group structures.
     ///

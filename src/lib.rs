@@ -35,3 +35,7 @@ pub mod record;
 /// - Performing range-based aggregation on records (from specific log groups or LogQL queries)
 ///   within a given time window, facilitated by [`query::query_log_range_aggregation`].
 pub mod query;
+
+// Add new runtime module and its export
+pub mod runtime;
+pub use runtime::DrainFlowRuntime;

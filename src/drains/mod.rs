@@ -21,9 +21,7 @@ pub mod dd_types;
 // If not, see <http://www.mongodb.com/licensing/server-side-public-license>.
 
 pub mod api;
-pub mod dd_runtime;
-pub mod differential_drain;
+pub mod dd_runtime; // This module now contains build_dataflow_graph_and_get_handles
 pub mod simple;
 pub mod two_stage_drain;
-pub use dd_runtime::DifferentialDrainRuntime;
-pub use differential_drain::DifferentialDrain;
+// Note: No pub use for DifferentialDrain or DifferentialDrainRuntime

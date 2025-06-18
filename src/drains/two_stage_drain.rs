@@ -166,6 +166,7 @@ fn collect_all_groups_in_subtree_free(
     }
 } // Correctly closing fn collect_all_groups_in_subtree_free
 
+#[deprecated(note = "Replaced by the asynchronous DrainFlowRuntime")]
 #[derive(Debug, Clone)]
 pub struct TwoStageDrain {
     pub domain: Vec<Regex>,

@@ -27,6 +27,7 @@ lazy_static! {
             string_interner::backend::BucketBackend,
         >::new()));
 }
+#[deprecated(note = "Replaced by the asynchronous DrainFlowRuntime")]
 #[derive(Debug, Clone)]
 pub struct SingleLayer {
     pub domain: Vec<Regex>,
