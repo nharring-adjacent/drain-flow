@@ -3,6 +3,8 @@ name = "drain-flow"
 version = "0.6.0"
 edition = "2021"
 rust-version="1.78.0"
+license-file="LICENSE"
+description = "Utility for parsing and analyzing log files of arbitrary format based on the DRAIN algorithm"
 
 [dependencies]
 anyhow = "1.0.63"
@@ -30,8 +32,8 @@ serde_json = "1.0.85"
 differential-dataflow = "0.12"
 timely = "0.12"
 lasso = "0.7.1"
-interned-string = "*"
-intern_string = "*"
+interned-string = "0.3.0"
+intern_string = "0.2.0"
 
 [dev-dependencies]
 chrono = "0.4"
