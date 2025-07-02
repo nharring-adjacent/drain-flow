@@ -1,32 +1,40 @@
 // src/intern_benchmark_harness/mod.rs
 
 /// A trait for abstracting string interning operations.
-/// This allows for benchmarking different interning strategies.
+///
+/// This trait allows for benchmarking different string interning strategies
+/// by providing a common interface for interning and resolving strings.
 pub trait StringInternerTrait {
-    /// Represents the type of the interned string symbol or reference.
-    /// For no interning, this could be String itself or Arc<String>.
-    /// For `string-interner`, this would be its Symbol type.
+    /// The type representing an interned string symbol or reference.
+    ///
+    /// For no interning, this could be `String` itself or `Arc<String>`.
+    /// For the `string-interner` crate, this would be its `Symbol` type.
     type Symbol: Clone + Eq + std::hash::Hash + std::fmt::Debug;
 
-    /// Interns a string slice and returns a symbol or reference.
+    /// Interns a string slice and returns its symbolic representation.
     ///
     /// # Arguments
-    /// * `s`: The string slice to intern.
+    ///
+    /// * `s` - The string slice to intern.
     ///
     /// # Returns
-    /// An interned representation of the string.
+    ///
+    /// The interned representation of the string.
     fn intern(&mut self, s: &str) -> Self::Symbol;
 
-    /// Resolves/retrieves the original string from its interned representation.
-    /// This is crucial for verifying correctness and for some interning patterns,
-    /// though not all "no interning" strategies would strictly need it for performance benchmarks.
+    /// Resolves an interned symbol back to its original string value.
+    ///
+    /// This method is crucial for verifying correctness and for certain interning
+    /// patterns, although not all "no interning" strategies would strictly need
+    /// it for performance benchmarks.
     ///
     /// # Arguments
-    /// * `symbol`: The interned symbol or reference.
+    ///
+    /// * `symbol` - The interned symbol or reference to resolve.
     ///
     /// # Returns
-    /// An owned [`String`] containing the original value corresponding to the
-    /// symbol.
+    ///
+    /// An owned `String` containing the original value corresponding to the symbol.
     fn resolve(&self, symbol: &Self::Symbol) -> String;
 }
 
@@ -48,14 +56,23 @@ use arc_string_interner::StringInterner as ArcStringInternerImpl;
 use arc_string_interner::Sym as ArcSym;
 
 /// An implementation of `StringInternerTrait` using the project's shared `string-interner`.
+///
+/// This struct provides a way to interact with the global, shared string interner
+/// (`simple::INTERNER`) for benchmarking purposes.
 pub struct SharedStringInterner {
-    // Keep a reference to the global interner.
-    // The global INTERNER is Arc<RwLock<StringInterner<...>>>
-    // We can clone the Arc for our struct.
+    /// A reference to the global `StringInterner` instance.
     interner_arc: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>>,
 }
 
 impl SharedStringInterner {
+    /// Creates a new `SharedStringInterner` instance.
+    ///
+    /// This constructor clones the `Arc` to the global interner, allowing multiple
+    /// `SharedStringInterner` instances to share the same underlying interner.
+    ///
+    /// # Returns
+    ///
+    /// A new `SharedStringInterner` instance.
     pub fn new() -> Self {
         Self {
             interner_arc: SHARED_INTERNER.clone(),
@@ -66,11 +83,39 @@ impl SharedStringInterner {
 impl StringInternerTrait for SharedStringInterner {
     type Symbol = DefaultSymbol;
 
+    /// Interns a string slice using the shared `string-interner`.
+    ///
+    /// This method acquires a write lock on the shared interner to perform the
+    /// interning operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string slice to intern.
+    ///
+    /// # Returns
+    ///
+    /// The `DefaultSymbol` representing the interned string.
     fn intern(&mut self, s: &str) -> Self::Symbol {
-        // Acquire the write lock to intern.
         self.interner_arc.write().get_or_intern(s)
     }
 
+    /// Resolves a `DefaultSymbol` back to its original string using the shared `string-interner`.
+    ///
+    /// This method acquires a read lock on the shared interner to perform the
+    /// resolution operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The `DefaultSymbol` to resolve.
+    ///
+    /// # Returns
+    ///
+    /// An owned `String` corresponding to the resolved symbol.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the symbol cannot be resolved, which indicates an inconsistency
+    /// (e.g., a symbol was created by an interner other than the shared one).
     fn resolve(&self, symbol: &Self::Symbol) -> String {
         let guard = self.interner_arc.read();
         guard
@@ -82,12 +127,17 @@ impl StringInternerTrait for SharedStringInterner {
 
 // Implementations for the new string interning crates
 
-// 1. Lasso Interner (using Rodeo)
+/// An implementation of `StringInternerTrait` using the `lasso` crate's `Rodeo` interner.
 pub struct LassoInterner {
     interner: Rodeo,
 }
 
 impl LassoInterner {
+    /// Creates a new `LassoInterner` instance.
+    ///
+    /// # Returns
+    ///
+    /// A new `LassoInterner` instance.
     pub fn new() -> Self {
         Self {
             interner: Rodeo::new(),
@@ -104,19 +154,42 @@ impl Default for LassoInterner {
 impl StringInternerTrait for LassoInterner {
     type Symbol = Spur;
 
+    /// Interns a string slice using the `lasso` interner.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string slice to intern.
+    ///
+    /// # Returns
+    ///
+    /// The `Spur` symbol representing the interned string.
     fn intern(&mut self, s: &str) -> Self::Symbol {
         self.interner.get_or_intern(s)
     }
 
+    /// Resolves a `Spur` symbol back to its original string using the `lasso` interner.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The `Spur` symbol to resolve.
+    ///
+    /// # Returns
+    ///
+    /// An owned `String` corresponding to the resolved symbol.
     fn resolve(&self, symbol: &Self::Symbol) -> String {
         self.interner.resolve(symbol).to_string()
     }
 }
 
-// 2. InternedString Interner (using interned_string::IString)
+/// An implementation of `StringInternerTrait` using the `interned-string` crate's `IString`.
 pub struct InternedStringInterner;
 
 impl InternedStringInterner {
+    /// Creates a new `InternedStringInterner` instance.
+    ///
+    /// # Returns
+    ///
+    /// A new `InternedStringInterner` instance.
     pub fn new() -> Self {
         Self
     }
@@ -131,21 +204,44 @@ impl Default for InternedStringInterner {
 impl StringInternerTrait for InternedStringInterner {
     type Symbol = IString;
 
+    /// Interns a string slice using `IString::intern()`.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string slice to intern.
+    ///
+    /// # Returns
+    ///
+    /// The `IString` representing the interned string.
     fn intern(&mut self, s: &str) -> Self::Symbol {
         s.intern()
     }
 
+    /// Resolves an `IString` back to its original string.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The `IString` to resolve.
+    ///
+    /// # Returns
+    ///
+    /// An owned `String` corresponding to the resolved symbol.
     fn resolve(&self, symbol: &Self::Symbol) -> String {
         symbol.as_ref().to_string()
     }
 }
 
-// 3. intern-string Interner (using intern_string::Intern and InternId)
+/// An implementation of `StringInternerTrait` using the `intern-string` crate.
 pub struct InternStringImplInterner {
     interner: InternStringIntern<'static>,
 }
 
 impl InternStringImplInterner {
+    /// Creates a new `InternStringImplInterner` instance.
+    ///
+    /// # Returns
+    ///
+    /// A new `InternStringImplInterner` instance.
     pub fn new() -> Self {
         Self {
             interner: InternStringIntern::new(),
@@ -162,29 +258,47 @@ impl Default for InternStringImplInterner {
 impl StringInternerTrait for InternStringImplInterner {
     type Symbol = InternStringInternId;
 
+    /// Interns a string slice using the `intern-string` interner.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string slice to intern.
+    ///
+    /// # Returns
+    ///
+    /// The `InternStringInternId` representing the interned string.
     fn intern(&mut self, s: &str) -> Self::Symbol {
         self.interner.intern(s)
     }
 
+    /// Resolves an `InternStringInternId` back to its original string.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The `InternStringInternId` to resolve.
+    ///
+    /// # Returns
+    ///
+    /// An owned `String` corresponding to the resolved symbol.
     fn resolve(&self, symbol: &Self::Symbol) -> String {
         self.interner.lookup(*symbol).to_string()
     }
 }
 
-// 4. ArcStringInterner Interner
+/// An implementation of `StringInternerTrait` using the `arc-string-interner` crate.
 pub struct ArcStringInternerImplInterner {
-    // S is the Symbol type (e.g., Sym), T is the string type (e.g., String)
-    // The interner itself is StringInterner<SymbolType, Hasher, CONST_N>
-    // It stores strings of type String by default if not specified otherwise via another generic arg not present here.
-    // The methods like get_or_intern will be generic over T: Borrow<str> + Hash + Eq + ...
-    // and T will be stored as String (or specified S in StringInterner<StringStored, Sym, H, N> if API was different)
     interner: ArcStringInternerImpl<ArcSym, std::collections::hash_map::RandomState, 10>,
 }
 
 impl ArcStringInternerImplInterner {
+    /// Creates a new `ArcStringInternerImplInterner` instance.
+    ///
+    /// # Returns
+    ///
+    /// A new `ArcStringInternerImplInterner` instance.
     pub fn new() -> Self {
         Self {
-            interner: ArcStringInternerImpl::with_capacity(1024), // This will create StringInterner<Sym, RandomState, 0>
+            interner: ArcStringInternerImpl::with_capacity(1024), 
         }
     }
 }
@@ -196,15 +310,30 @@ impl Default for ArcStringInternerImplInterner {
 }
 
 impl StringInternerTrait for ArcStringInternerImplInterner {
-    type Symbol = ArcSym; // The symbol type used by the interner
+    type Symbol = ArcSym; 
 
+    /// Interns a string slice using the `arc-string-interner`.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string slice to intern.
+    ///
+    /// # Returns
+    ///
+    /// The `ArcSym` representing the interned string.
     fn intern(&mut self, s: &str) -> Self::Symbol {
-        // arc_string_interner stores T (e.g. String), interns it, and returns S (e.g. Sym)
-        // The method is get_or_intern(val: T) -> S
-        // By default T is String if StringInterner is StringInterner<Sym, RandomState, N>
         self.interner.get_or_intern(s.to_string())
     }
 
+    /// Resolves an `ArcSym` back to its original string.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The `ArcSym` to resolve.
+    ///
+    /// # Returns
+    ///
+    /// An owned `String` corresponding to the resolved symbol.
     fn resolve(&self, symbol: &Self::Symbol) -> String {
         let arc_str_val: Arc<str> = self
             .interner
@@ -222,7 +351,9 @@ impl Default for SharedStringInterner {
 }
 
 /// An implementation of `StringInternerTrait` that does no actual interning.
-/// It stores and returns owned Strings. This serves as a baseline.
+///
+/// This struct serves as a baseline for benchmarking, as it simply stores and
+/// returns owned `String`s without any interning optimization.
 #[derive(Default)]
 pub struct NoInterningBaseline {
     // No shared state needed for this baseline, as each "interned" string
@@ -232,31 +363,62 @@ pub struct NoInterningBaseline {
 }
 
 impl NoInterningBaseline {
+    /// Creates a new `NoInterningBaseline` instance.
+    ///
+    /// # Returns
+    ///
+    /// A new `NoInterningBaseline` instance.
     pub fn new() -> Self {
         Self {}
     }
 }
 
 impl StringInternerTrait for NoInterningBaseline {
-    // For the no-interning baseline, the "symbol" is the String itself.
+    /// The "symbol" type for this baseline is `String` itself, as no interning occurs.
     type Symbol = String;
 
+    /// "Interns" a string slice by creating an owned copy.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string slice to "intern".
+    ///
+    /// # Returns
+    ///
+    /// An owned `String` copy of the input slice.
     fn intern(&mut self, s: &str) -> Self::Symbol {
-        // "Interning" here simply means creating an owned copy of the string.
         s.to_string()
     }
 
+    /// Resolves a `String` symbol by simply cloning it.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The `String` to resolve.
+    ///
+    /// # Returns
+    ///
+    /// A cloned `String` corresponding to the input symbol.
     fn resolve(&self, symbol: &Self::Symbol) -> String {
         symbol.clone()
     }
 }
 
 // 1. StringBackendInterner (explicit, fresh instance)
+/// An implementation of `StringInternerTrait` using `string_interner::backend::StringBackend`.
+///
+/// This interner uses a `StringBackend` for storage, which is suitable for general-purpose
+/// string interning where strings are stored directly.
 pub struct StringBackendInterner {
     interner: StringInterner<StringBackend, RandomState>,
 }
 
 impl StringBackendInterner {
+    /// Creates a new `StringBackendInterner` instance.
+    ///
+    /// # Returns
+    ///
+    /// A new `StringBackendInterner` instance.
     pub fn new() -> Self {
         Self {
             interner: StringInterner::<StringBackend, RandomState>::new(),
@@ -273,10 +435,32 @@ impl Default for StringBackendInterner {
 impl StringInternerTrait for StringBackendInterner {
     type Symbol = DefaultSymbol;
 
+    /// Interns a string slice using the `StringBackend` interner.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string slice to intern.
+    ///
+    /// # Returns
+    ///
+    /// The `DefaultSymbol` representing the interned string.
     fn intern(&mut self, s: &str) -> Self::Symbol {
         self.interner.get_or_intern(s)
     }
 
+    /// Resolves a `DefaultSymbol` back to its original string using the `StringBackend` interner.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The `DefaultSymbol` to resolve.
+    ///
+    /// # Returns
+    ///
+    /// An owned `String` corresponding to the resolved symbol.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the symbol cannot be resolved, which indicates an inconsistency.
     fn resolve(&self, symbol: &Self::Symbol) -> String {
         self.interner
             .resolve(*symbol)
@@ -285,12 +469,21 @@ impl StringInternerTrait for StringBackendInterner {
     }
 }
 
-// 2. BucketBackendInterner
+/// An implementation of `StringInternerTrait` using `string_interner::backend::BucketBackend`.
+///
+/// This interner uses a `BucketBackend` for storage, which is optimized for scenarios
+/// where strings are grouped into buckets based on their hash, potentially reducing
+/// collision and improving lookup times for certain data distributions.
 pub struct BucketBackendInterner {
     interner: StringInterner<BucketBackend, RandomState>,
 }
 
 impl BucketBackendInterner {
+    /// Creates a new `BucketBackendInterner` instance.
+    ///
+    /// # Returns
+    ///
+    /// A new `BucketBackendInterner` instance.
     pub fn new() -> Self {
         Self {
             interner: StringInterner::<BucketBackend, RandomState>::new(),
@@ -307,10 +500,32 @@ impl Default for BucketBackendInterner {
 impl StringInternerTrait for BucketBackendInterner {
     type Symbol = DefaultSymbol;
 
+    /// Interns a string slice using the `BucketBackend` interner.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string slice to intern.
+    ///
+    /// # Returns
+    ///
+    /// The `DefaultSymbol` representing the interned string.
     fn intern(&mut self, s: &str) -> Self::Symbol {
         self.interner.get_or_intern(s)
     }
 
+    /// Resolves a `DefaultSymbol` back to its original string using the `BucketBackend` interner.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The `DefaultSymbol` to resolve.
+    ///
+    /// # Returns
+    ///
+    /// An owned `String` corresponding to the resolved symbol.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the symbol cannot be resolved, which indicates an inconsistency.
     fn resolve(&self, symbol: &Self::Symbol) -> String {
         self.interner
             .resolve(*symbol)
@@ -319,12 +534,21 @@ impl StringInternerTrait for BucketBackendInterner {
     }
 }
 
-// 3. BufferBackendInterner
+/// An implementation of `StringInternerTrait` using `string_interner::backend::BufferBackend`.
+///
+/// This interner uses a `BufferBackend` for storage, which is designed for efficient
+/// storage of strings in a contiguous buffer, potentially offering better cache locality
+/// and performance for certain access patterns.
 pub struct BufferBackendInterner {
     interner: StringInterner<BufferBackend, RandomState>,
 }
 
 impl BufferBackendInterner {
+    /// Creates a new `BufferBackendInterner` instance.
+    ///
+    /// # Returns
+    ///
+    /// A new `BufferBackendInterner` instance.
     pub fn new() -> Self {
         Self {
             interner: StringInterner::<BufferBackend, RandomState>::new(),
@@ -341,10 +565,32 @@ impl Default for BufferBackendInterner {
 impl StringInternerTrait for BufferBackendInterner {
     type Symbol = DefaultSymbol;
 
+    /// Interns a string slice using the `BufferBackend` interner.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string slice to intern.
+    ///
+    /// # Returns
+    ///
+    /// The `DefaultSymbol` representing the interned string.
     fn intern(&mut self, s: &str) -> Self::Symbol {
         self.interner.get_or_intern(s)
     }
 
+    /// Resolves a `DefaultSymbol` back to its original string using the `BufferBackend` interner.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The `DefaultSymbol` to resolve.
+    ///
+    /// # Returns
+    ///
+    /// An owned `String` corresponding to the resolved symbol.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the symbol cannot be resolved, which indicates an inconsistency.
     fn resolve(&self, symbol: &Self::Symbol) -> String {
         self.interner
             .resolve(*symbol)

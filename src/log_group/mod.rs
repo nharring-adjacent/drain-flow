@@ -17,15 +17,27 @@ use uuid::Uuid;
 
 use crate::record::{tokens::Token, Record};
 
+/// Represents a logical grouping of similar log records.
+///
+/// A `LogGroup` is characterized by a base event (a `Record`) and a collection
+/// of example records that match the group's pattern. It also tracks variables
+/// (wildcards) within the log pattern.
 #[derive(Clone, Debug)]
 pub struct LogGroup {
+    /// The unique identifier for this log group.
     pub id: Uuid,
+    /// The base event or representative record for this log group.
     event: Record,
+    /// A collection of log records that belong to this group.
     examples: Vec<Record>,
+    /// A map of variable positions (offset) to their `Token` type within the event pattern.
     pub variables: HashMap<usize, Token>,
 }
 
-/// A wildcard is an offset and a typed token
+/// Represents a wildcard (variable) found within a log pattern.
+///
+/// It stores the offset (position) of the wildcard within the log line
+/// and the `Token` type of the wildcard.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Wildcard((usize, Token));
 
@@ -36,6 +48,18 @@ impl fmt::Display for Wildcard {
 }
 
 impl LogGroup {
+    /// Creates a new `LogGroup` from an initial `Record`.
+    ///
+    /// The provided `event` becomes the base record for the group, and is also
+    /// added as the first example.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` - The initial `Record` that defines this log group.
+    ///
+    /// # Returns
+    ///
+    /// A new `LogGroup` instance.
     #[instrument(level = "trace", skip(event))]
     pub fn new(event: Record) -> Self {
         let id = event.uid;
@@ -47,6 +71,14 @@ impl LogGroup {
         }
     }
 
+    /// Adds a new example `Record` to the log group.
+    ///
+    /// This method also attempts to discover new variables (wildcards) by comparing
+    /// the new record with the group's base event and updates the group's variable map.
+    ///
+    /// # Arguments
+    ///
+    /// * `rec` - The `Record` to add as an example.
     #[instrument(level = "trace", skip(self, rec))]
     pub fn add_example(&mut self, rec: Record) {
         let vars = self.discover_variables(&rec).unwrap();
@@ -56,6 +88,13 @@ impl LogGroup {
         }
     }
 
+    /// Returns a reference to the base event (`Record`) of this log group.
+    ///
+    /// This record represents the generalized pattern of the log group.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the `Record` that is the base event.
     #[instrument(level = "trace", skip(self))]
     pub fn event(&self) -> &Record {
         // This is the original event/base_record
@@ -63,16 +102,40 @@ impl LogGroup {
     }
 
     /// Returns a reference to the base record of the log group.
+    ///
+    /// This is an alias for `event()`.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the `Record` that is the base record.
     pub fn base_record(&self) -> &Record {
         &self.event
     }
 
-    /// Returns a slice of the example records in the log group.
+    /// Returns a slice of the example records stored in this log group.
+    ///
+    /// These are the actual log lines that have been clustered into this group.
+    ///
+    /// # Returns
+    ///
+    /// A slice (`&Vec<Record>`) of the example records.
     pub fn examples(&self) -> &Vec<Record> {
         &self.examples
     }
 
-    /// Compare a record with this log group and identify positions which qualify as variables, returned as vector of [Wildcard]
+    /// Compares a given `Record` with the log group's base event to identify variable positions.
+    ///
+    /// Positions where the tokens differ between the record and the base event,
+    /// and are not already identified as variables, are considered new variables.
+    ///
+    /// # Arguments
+    ///
+    /// * `rec` - The `Record` to compare against the base event.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing a `Vec<Wildcard>` representing the newly discovered
+    /// variable positions, or an `anyhow::Error` if the comparison fails.
     #[instrument(level = "trace", skip(self, rec))]
     pub fn discover_variables(&self, rec: &Record) -> Result<Vec<Wildcard>, Error> {
         let f = self
@@ -97,6 +160,14 @@ impl LogGroup {
         Ok(f)
     }
 
+    /// Updates the log group's variable map and base event with newly discovered wildcards.
+    ///
+    /// This method is typically called after `discover_variables` to incorporate
+    /// the identified variables into the group's pattern.
+    ///
+    /// # Arguments
+    ///
+    /// * `vars` - A `Vec<Wildcard>` containing the variables to update.
     #[instrument(level = "trace", skip(self, vars))]
     fn update_variables(&mut self, vars: Vec<Wildcard>) {
         for var in vars {
@@ -108,31 +179,55 @@ impl LogGroup {
         }
     }
 
-    /// Total number of records stored in this [LogGroup]
+    /// Returns the total number of example records stored in this `LogGroup`.
+    ///
+    /// # Returns
+    ///
+    /// The number of examples as a `usize`.
     #[instrument(level = "trace", skip_all)]
     pub fn len(&self) -> usize {
         self.examples.len()
     }
 
-    /// Whether any examples exist for a [LogGroup]
+    /// Checks if the log group contains any example records.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the log group has no examples, `false` otherwise.
     #[instrument(level = "trace", skip_all)]
     pub fn is_empty(&self) -> bool {
         self.examples.is_empty()
     }
 
-    /// Return a Vec<&Record> of the example records for this group
+    /// Returns a vector of references to the example records for this group.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<&Record>` containing references to all example records.
     #[instrument(level = "trace", skip_all)]
     pub fn get_examples(&self) -> Vec<&Record> {
         self.examples.iter().collect::<Vec<&Record>>()
     }
 
-    /// Returns the [Uuid] associated with the [LogGroup], usually identical to the [Record] which created the group
+    /// Returns the unique identifier (`Uuid`) associated with this `LogGroup`.
+    ///
+    /// This ID is typically the same as the `Uuid` of the `Record` that created the group.
+    ///
+    /// # Returns
+    ///
+    /// The `Uuid` of the log group.
     #[instrument(level = "trace", skip_all)]
     pub fn get_id(&self) -> Uuid {
         self.id
     }
 
-    /// Returns the [DateTime] of the creation of the base event in the [LogGroup]
+    /// Returns the creation timestamp of the base event in the `LogGroup` as a `DateTime<Utc>`.
+    ///
+    /// This timestamp is derived from the `Uuid` of the base event.
+    ///
+    /// # Returns
+    ///
+    /// A `DateTime<Utc>` representing the creation time of the base event.
     #[instrument(level = "trace", skip_all)]
     pub fn get_time(&self) -> DateTime<Utc> {
         // Uuid::get_timestamp returns Option<Timestamp>
@@ -154,6 +249,19 @@ impl LogGroup {
 }
 
 impl fmt::Display for LogGroup {
+    /// Formats the `LogGroup` for display.
+    ///
+    /// This implementation provides a human-readable summary of the log group,
+    /// including its ID, first seen timestamp, base event, number of examples,
+    /// and number of wildcards.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - The formatter to write into.
+    ///
+    /// # Returns
+    ///
+    /// A `fmt::Result` indicating success or failure of the formatting operation.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

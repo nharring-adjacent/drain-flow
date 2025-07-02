@@ -26,27 +26,22 @@ impl fmt::Display for TokenOrWildcard {
 /// Represents a raw log entry.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct LogMessage {
-    pub timestamp: u64, // Or chrono::DateTime<chrono::Utc> if more precision/timezone handling is needed
+    pub timestamp: u64, 
     pub content: String,
-    // Potentially an ID if logs come with a unique identifier from the source
-    // pub source_id: Option<String>,
 }
 
 /// Represents a log message after preprocessing and tokenization.
-/// Tokens are expected to be interned strings, but stored as actual strings or symbols.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ProcessedLogMessage {
-    pub original_message_id: Uuid, // Link back to an original LogMessage or a unique ID generated for it
-    pub tokens: Vec<String>,       // Or Vec<DefaultSymbol> if using string_interner directly here
-                                   // pub length: usize, // Can be derived from tokens.len()
+    pub original_message_id: Uuid, 
+    pub tokens: Vec<String>,       
 }
 
 /// Enum representing either a specific token (interned string) or a wildcard.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Debug)]
 pub enum TokenOrWildcard {
-    Token(String), // Or DefaultSymbol
+    Token(String), 
     Wildcard,
-    // Potentially more specific wildcards, e.g., WildcardNumeric, WildcardAlphanum
 }
 
 /// Represents a DRAIN log cluster.
@@ -54,17 +49,17 @@ pub enum TokenOrWildcard {
 pub struct LogCluster {
     pub cluster_id: Uuid,
     pub log_template: Vec<TokenOrWildcard>,
-    // Store a few representative ProcessedLogMessage (or their IDs/content)
-    // For simplicity, let's store the full ProcessedLogMessage for now.
-    // In a high-volume system, storing only IDs or a compressed representation might be better.
-    pub samples: Vec<ProcessedLogMessage>, // Could also be Vec<Uuid> referring to ProcessedLogMessage IDs
+    pub samples: Vec<ProcessedLogMessage>, 
     pub count: u64,
-    // Potentially add:
-    // pub first_seen: u64, // Timestamp of the first message in this cluster
-    // pub last_seen: u64, // Timestamp of the most recent message
 }
 
 impl LogCluster {
+    /// Creates a new `LogCluster`.
+    ///
+    /// # Arguments
+    ///
+    /// * `initial_message` - The first `ProcessedLogMessage` to add to the cluster.
+    /// * `template` - The initial template for the cluster.
     pub fn new(initial_message: ProcessedLogMessage, template: Vec<TokenOrWildcard>) -> Self {
         LogCluster {
             cluster_id: Uuid::new_v4(),
@@ -79,7 +74,7 @@ impl LogCluster {
 pub struct DifferentialDrain {
     clusters: Vec<LogCluster>,
     similarity_threshold: f32,
-    max_depth: usize, // Not used in the simplified version yet, but part of the definition
+    max_depth: usize, 
 }
 
 // 2. Implement `Default` for `DifferentialDrain`:
@@ -87,22 +82,24 @@ impl Default for DifferentialDrain {
     fn default() -> Self {
         Self {
             clusters: Vec::new(),
-            similarity_threshold: 0.5, // Default similarity threshold
-            // max_depth here acts as a minimum number of concrete (non-wildcard) tokens
-            // a template must have after generalization.
-            max_depth: 2, // Example: a template must have at least 2 concrete tokens.
+            similarity_threshold: 0.5, 
+            max_depth: 2, 
         }
     }
 }
 
 // 3. Implement `new` constructor for `DifferentialDrain`:
 impl DifferentialDrain {
+    /// Creates a new `DifferentialDrain`.
+    ///
+    /// # Arguments
+    ///
+    /// * `similarity_threshold` - The similarity threshold to use for clustering.
+    /// * `max_depth` - The maximum depth of the log cluster tree.
     pub fn new(similarity_threshold: f32, max_depth: usize) -> Self {
         Self {
             clusters: Vec::new(),
             similarity_threshold,
-            // max_depth here acts as a minimum number of concrete (non-wildcard) tokens
-            // a template must have after generalization.
             max_depth,
         }
     }
@@ -112,8 +109,6 @@ impl DifferentialDrain {
         match serde_json::to_string_pretty(&self.clusters) {
             Ok(json_str) => json_str,
             Err(e) => {
-                // In case of error, return a string indicating the failure.
-                // Consider logging the error as well if a logger is available here.
                 format!("Error serializing clusters to JSON: {}", e)
             }
         }
@@ -243,7 +238,24 @@ impl DifferentialDrain {
 
 // 4. Implement `Drain` trait for `DifferentialDrain`:
 impl Drain for DifferentialDrain {
-    // **a. `process_line(&mut self, line: String) -> Result<bool, anyhow::Error>`:**
+    /// Processes a single log line, attempting to match it to an existing log cluster.
+    /// If a suitable cluster is found, the message is added to it, and the cluster's
+    /// template may be generalized. If no suitable cluster is found, a new cluster
+    /// is created for the log line.
+    ///
+    /// This method also handles the re-evaluation and potential re-assignment of
+    /// samples from other clusters if the generalization of a cluster's template
+    /// makes it a better match for those samples.
+    ///
+    /// # Arguments
+    ///
+    /// * `line` - The log line to be processed.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(true)` if a new log cluster was created.
+    /// * `Ok(false)` if the log line was added to an existing cluster.
+    /// * `Err(anyhow::Error)` if an error occurred during processing.
     fn process_line(&mut self, line: String) -> Result<bool, Error> {
         info!(target: "differential_drain", "process_line started for line: {}", line);
         let tokens = Self::tokenize_line(&line);
@@ -534,6 +546,16 @@ impl Drain for DifferentialDrain {
         Ok(true)
     }
 
+    /// Retrieves all unique `LogGroup`s currently managed by the drain.
+    ///
+    /// This method converts the internal `LogCluster` representation into `LogGroup`s,
+    /// suitable for external consumption.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<LogGroup>` containing all log groups. Each `LogGroup` will have a
+    /// representative line derived from the cluster's template and include all
+    /// processed samples as examples.
     fn collect_log_groups(&self) -> Vec<LogGroup> {
         self.clusters
             .iter()
@@ -562,6 +584,18 @@ impl Drain for DifferentialDrain {
 }
 
 impl DifferentialDrain {
+    /// Tokenizes a given log line into a vector of strings.
+    ///
+    /// This method uses a predefined regular expression to split the log line
+    /// into meaningful tokens, such as IP addresses, UUIDs, numbers, and words.
+    ///
+    /// # Arguments
+    ///
+    /// * `line` - The log line string to tokenize.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<String>` where each string is a token from the input line.
     fn tokenize_line(line: &str) -> Vec<String> {
         lazy_static! {
             static ref TOKEN_RE: Regex = Regex::new(
@@ -582,6 +616,20 @@ impl DifferentialDrain {
             .collect()
     }
 
+    /// Calculates the similarity between a message's tokens and a cluster's template.
+    ///
+    /// The similarity is defined as the number of matching tokens (where a wildcard
+    /// in the template always matches) divided by the total number of tokens in the template.
+    ///
+    /// # Arguments
+    ///
+    /// * `message_tokens` - A slice of strings representing the tokens of a log message.
+    /// * `template_tokens` - A slice of `TokenOrWildcard` representing the cluster's template.
+    ///
+    /// # Returns
+    ///
+    /// A `f32` value between 0.0 and 1.0, indicating the similarity. Returns 0.0 if
+    /// token lengths do not match or if the template is empty and message tokens are not.
     fn calculate_similarity(message_tokens: &[String], template_tokens: &[TokenOrWildcard]) -> f32 {
         if template_tokens.is_empty() {
             return if message_tokens.is_empty() { 1.0 } else { 0.0 };
@@ -605,6 +653,18 @@ impl DifferentialDrain {
         matching_tokens_count as f32 / template_tokens.len() as f32
     }
 
+    /// Creates a new log template from a given slice of message tokens.
+    ///
+    /// Initially, each token from the message is converted into a `TokenOrWildcard::Token`.
+    /// This serves as the starting template for a new log cluster.
+    ///
+    /// # Arguments
+    ///
+    /// * `tokens` - A slice of strings representing the tokens of a log message.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<TokenOrWildcard>` representing the initial template.
     fn create_template_from_message(tokens: &[String]) -> Vec<TokenOrWildcard> {
         tokens
             .iter()
