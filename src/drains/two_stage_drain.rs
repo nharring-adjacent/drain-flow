@@ -30,19 +30,33 @@ lazy_static! {
     static ref DRAIN_ASTERISK: DefaultSymbol = simple::INTERNER.write().get_or_intern_static("<*>");
 }
 
+/// Represents the kind of a node in the `TwoStageDrain`'s tree structure.
 #[derive(Debug, Clone)]
 pub enum NodeKind {
+    /// A leaf node, containing a vector of `LogGroup`s.
     Leaf(Vec<LogGroup>),
+    /// An internal node, containing a map of child nodes keyed by `DefaultSymbol`.
     Internal(HashMap<DefaultSymbol, Node>),
 }
 
+/// Represents a node in the `TwoStageDrain`'s tree structure.
+///
+/// Each node has a unique ID and can either be a `Leaf` node (containing log groups)
+/// or an `Internal` node (containing child nodes).
 #[derive(Debug, Clone)]
 pub struct Node {
+    /// The unique identifier for this node.
     pub id: Uuid,
+    /// The kind of node, either `Leaf` or `Internal`.
     pub kind: NodeKind,
 }
 
 impl Node {
+    /// Creates a new internal node with a randomly generated UUID and an empty map of children.
+    ///
+    /// # Returns
+    ///
+    /// A new `Node` instance of `NodeKind::Internal`.
     pub fn new_internal_node() -> Self {
         Node {
             id: Uuid::new_v4(),
@@ -50,8 +64,11 @@ impl Node {
         }
     }
 
-    // Removed collect_all_groups_in_subtree from impl Node
-
+    /// Creates a new leaf node with a randomly generated UUID and an empty vector of log groups.
+    ///
+    /// # Returns
+    ///
+    /// A new `Node` instance of `NodeKind::Leaf`.
     pub fn new_leaf_node() -> Self {
         Node {
             id: Uuid::new_v4(),
@@ -59,6 +76,15 @@ impl Node {
         }
     }
 
+    /// Creates a new leaf node with a randomly generated UUID and a pre-existing vector of log groups.
+    ///
+    /// # Arguments
+    ///
+    /// * `groups` - A `Vec<LogGroup>` to initialize the leaf node with.
+    ///
+    /// # Returns
+    ///
+    /// A new `Node` instance of `NodeKind::Leaf` containing the provided groups.
     pub fn new_leaf_node_with_groups(groups: Vec<LogGroup>) -> Self {
         Node {
             id: Uuid::new_v4(),
@@ -144,7 +170,17 @@ mod tests {
     }
 }
 
-// Define collect_all_groups_in_subtree_free as a free function
+/// Recursively collects all `LogGroup`s from a given node and its subtree.
+///
+/// This is a helper function used during tree traversal to gather all log groups
+/// that are candidates for matching a new log line.
+///
+/// # Arguments
+///
+/// * `node` - The current node to start collecting log groups from.
+/// * `path_to_node` - The path (sequence of `DefaultSymbol`s) from the root of the
+///   length-specific tree to the `node`.
+/// * `candidate_paths` - A mutable vector to accumulate tuples of `(path_to_leaf, log_group_id)`.
 fn collect_all_groups_in_subtree_free(
     node: &Node,
     path_to_node: Vec<DefaultSymbol>,
@@ -164,29 +200,58 @@ fn collect_all_groups_in_subtree_free(
             }
         }
     }
-} // Correctly closing fn collect_all_groups_in_subtree_free
+}
 
+/// `TwoStageDrain` is an advanced implementation of the `Drain` trait that uses a
+/// tree-like structure to efficiently cluster log messages. It employs a two-stage
+/// process: first, preprocessing log lines to replace domain-specific patterns with
+/// wildcards, and second, organizing and matching these processed lines within a
+/// hierarchical tree based on their token sequences.
 #[derive(Debug, Clone)]
 pub struct TwoStageDrain {
+    /// Regular expressions defining the domain patterns to be replaced in log lines.
     pub domain: Vec<Regex>,
+    /// The root of the tree structure, where keys are log line lengths and values are the
+    /// corresponding root nodes for that length.
     pub tree: HashMap<usize, Node>,
+    /// The similarity threshold used to determine if a new log line matches an existing
+    /// `LogGroup` within the tree.
     pub threshold: Ratio<BigInt>,
+    /// A shared string interner for efficient storage and comparison of log tokens.
     pub strings: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>>,
+    /// The maximum depth of the tree, which influences the specificity of log templates.
     pub max_depth: usize,
+    /// The maximum number of children an internal node can have before it is converted
+    /// into a leaf node (generalizing its subtree).
     pub max_children: usize,
-    pub line_count_processed: usize, // Added for integration test harness
+    /// A counter for the total number of log lines processed by this drain.
+    pub line_count_processed: usize,
 }
 
 impl TwoStageDrain {
+    /// Recursively finds candidate `LogGroup`s within the tree that a new log record
+    /// might match. This function traverses the tree based on the tokens of the
+    /// incoming log record, considering both specific token matches and wildcard matches.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_node` - The current node being examined in the tree traversal.
+    /// * `record_tokens` - The tokenized representation of the log record being processed.
+    /// * `current_path` - The path (sequence of symbols) from the root of the length-specific
+    ///   tree to the `current_node`.
+    /// * `current_depth` - The current depth in the tree traversal.
+    /// * `max_depth` - The maximum allowed depth for the tree.
+    /// * `candidate_paths` - A mutable vector to collect the paths and IDs of potential
+    ///   matching `LogGroup`s.
     #[allow(clippy::only_used_in_recursion)]
     fn find_candidate_log_groups(
         &self,
         current_node: &Node,
         record_tokens: &[DefaultSymbol],
-        current_path: Vec<DefaultSymbol>, // Path from root of this length-tree to current_node
+        current_path: Vec<DefaultSymbol>, 
         current_depth: usize,
         max_depth: usize,
-        candidate_paths: &mut Vec<(Vec<DefaultSymbol>, Uuid)>, // path_to_leaf, log_group_id
+        candidate_paths: &mut Vec<(Vec<DefaultSymbol>, Uuid)>, 
     ) {
         // Base case: if we're at or beyond max_depth, this node should be a leaf
         // or treated as such for candidate collection.
@@ -282,7 +347,19 @@ impl TwoStageDrain {
         }
     }
 
-    // Helper to find a log group by ID starting from a given node (immutable search)
+    /// Finds a `LogGroup` by its ID within a given node's subtree.
+    ///
+    /// This is a recursive helper function for immutable searching.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - The node to start the search from.
+    /// * `group_id` - The `Uuid` of the `LogGroup` to find.
+    ///
+    /// # Returns
+    ///
+    /// An `Option<&LogGroup>` containing a reference to the found `LogGroup` if it exists,
+    /// otherwise `None`.
     fn find_log_group_in_node_by_id(node: &Node, group_id: Uuid) -> Option<&LogGroup> {
         match &node.kind {
             NodeKind::Leaf(log_groups) => {
@@ -304,11 +381,18 @@ impl TwoStageDrain {
         }
     }
 
+    /// Collects all `LogGroup`s from a given node and its subtree, consuming the nodes.
+    ///
+    /// This function is used when restructuring the tree, for example, when converting
+    /// an internal node to a leaf node. It moves the `LogGroup`s out of the nodes.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - The node to collect log groups from (mutable).
+    /// * `all_log_groups` - A mutable vector to append the collected `LogGroup`s to.
     fn collect_log_groups_from_node(node: &mut Node, all_log_groups: &mut Vec<LogGroup>) {
         match node.kind {
             NodeKind::Leaf(ref mut groups) => {
-                // This method is used when restructuring the tree (e.g. internal to leaf).
-                // It takes ownership of the groups. For benchmarking, we need clones.
                 all_log_groups.append(&mut std::mem::take(groups));
             }
             NodeKind::Internal(ref mut children_map) => {
@@ -319,7 +403,15 @@ impl TwoStageDrain {
         }
     }
 
-    // New recursive helper for collect_all_log_groups (read-only traversal)
+    /// Recursively collects all `LogGroup`s from a given node and its subtree.
+    ///
+    /// This is a read-only traversal used for collecting all log groups for external
+    /// consumption (e.g., by the `collect_log_groups` method of the `Drain` trait).
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - The node to start collecting log groups from.
+    /// * `collected_groups` - A mutable vector to append the cloned `LogGroup`s to.
     fn collect_groups_recursive(node: &Node, collected_groups: &mut Vec<LogGroup>) {
         match &node.kind {
             NodeKind::Leaf(groups) => {
@@ -335,34 +427,21 @@ impl TwoStageDrain {
         }
     }
 
-    // get_or_create_log_group_mut no longer needs &mut self
-    // It operates on current_node and global INTERNER, and parameters.
-    // However, to be callable from process_line which has &mut self,
-    // and to fit the overall structure without a larger refactor now,
-    // we keep &mut self but acknowledge it's not strictly needed for E0499 if INTERNER is global.
-    // The E0499 fix is primarily about how `self.tree` (via `root_node_for_length`)
-    // and `self` (for the method call) are borrowed.
-    // By making collect_log_groups_from_node not take &self, we simplify one part.
-    // The core issue is that `root_node_for_length` is a mutable borrow from `self.tree`.
-    // Then `get_or_create_log_group_mut` is called on `self`.
-    //
-    // If get_or_create_log_group_mut did NOT take &mut self, the E0499 would be resolved.
-    // But it needs to, to call collect_log_groups_from_node if that method remains on &self.
-    // Since we changed collect_log_groups_from_node to not need &self,
-    // get_or_create_log_group_mut also doesn't strictly need &mut self IF
-    // it didn't modify anything else on self (like self.strings, which it doesn't directly).
-    //
-    // Let's proceed with the change to `collect_log_groups_from_node` first as it's cleaner.
-    // The E0499 might persist if `get_or_create_log_group_mut` still takes `&mut self`.
-    // The true fix for E0499 is to break the aliasing of `&mut self.tree` (via `root_node_for_length`)
-    // and `&mut self` (for the method call).
-    // This often involves:
-    // 1. Finishing the borrow of `root_node_for_length` before calling the method.
-    // 2. Restructuring the method to not take `&mut self` if it only operates on its arguments and globals.
-    //
-    // For now, only applying the `collect_log_groups_from_node` change and `threshold.clone()`.
-    // The E0499 error is more complex and might require a different strategy if it persists.
-
+    /// Gets a mutable reference to the `Vec<LogGroup>` where a new log group should be
+    /// inserted or an existing one updated. This function traverses or creates nodes
+    /// in the tree as necessary to reach the appropriate leaf node.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_node` - The current node in the tree traversal (mutable).
+    /// * `record_tokens` - The tokenized representation of the log record.
+    /// * `current_depth` - The current depth in the tree traversal.
+    /// * `max_depth` - The maximum allowed depth for the tree.
+    /// * `max_children` - The maximum number of children an internal node can have.
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to the `Vec<LogGroup>` at the target leaf node.
     fn get_or_create_log_group_mut<'a>(
         current_node: &'a mut Node,
         record_tokens: &[DefaultSymbol],
@@ -490,6 +569,26 @@ impl TwoStageDrain {
         } // end 'transform_loop
     }
 
+    /// Creates a new `TwoStageDrain` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `domain_regex_strings` - A vector of strings, each representing a regular
+    ///   expression pattern to be used for preprocessing log lines. These patterns
+    ///   are replaced with a wildcard token (`<*>`) before further processing.
+    /// * `threshold` - The similarity threshold (a float between 0.0 and 1.0) used
+    ///   to determine if a new log line matches an existing `LogGroup`.
+    /// * `max_depth` - The maximum depth of the tree. This controls how specific
+    ///   log templates can be. A higher depth allows for more specific patterns.
+    /// * `max_children` - The maximum number of children an internal node can have.
+    ///   If a node exceeds this limit, it is converted into a leaf node, and its
+    ///   subtree is generalized.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the new `TwoStageDrain` instance on success, or an
+    /// `anyhow::Error` if any of the provided domain patterns are invalid regular
+    /// expressions or if the threshold value is invalid.
     pub fn new(
         domain_regex_strings: Vec<String>,
         threshold: f32,
@@ -521,6 +620,27 @@ impl TwoStageDrain {
 }
 
 impl Drain for TwoStageDrain {
+    /// Processes a single log line, attempting to match it to an existing log group
+    /// within the tree structure. If a suitable match is found, the log line is
+    /// added to that group. Otherwise, a new log group is created and inserted
+    /// into the tree.
+    ///
+    /// The process involves:
+    /// 1. Preprocessing the log line by replacing domain-specific patterns with wildcards.
+    /// 2. Tokenizing the preprocessed line.
+    /// 3. Traversing the tree to find candidate log groups based on the token sequence.
+    /// 4. Calculating similarity scores and selecting the best match.
+    /// 5. Updating the matched log group or creating a new one.
+    ///
+    /// # Arguments
+    ///
+    /// * `line` - The log line to be processed.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(true)` if a new log group was created.
+    /// * `Ok(false)` if the log line was added to an existing log group.
+    /// * `Err(anyhow::Error)` if an error occurred during processing.
     fn process_line(&mut self, line: String) -> Result<bool, Error> {
         let local_max_depth = self.max_depth;
         let local_max_children = self.max_children;
@@ -634,13 +754,17 @@ impl Drain for TwoStageDrain {
         Ok(true) // Created new group
     }
 
+    /// Collects all `LogGroup`s currently stored in the drain.
+    ///
+    /// This method traverses the tree structure and gathers all log groups
+    /// from leaf nodes.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<LogGroup>` containing clones of all log groups.
     fn collect_log_groups(&self) -> Vec<LogGroup> {
         let mut all_groups = Vec::new();
         for node in self.tree.values() {
-            // Assuming collect_groups_recursive is a static/helper method or defined on Self
-            // If it's an instance method, it would be self.collect_groups_recursive
-            // Based on its usage elsewhere (Self::), it's likely a static helper or associated function
-            // that can be called like this.
             TwoStageDrain::collect_groups_recursive(node, &mut all_groups);
         }
         all_groups

@@ -29,14 +29,29 @@ lazy_static! {
 }
 #[derive(Debug, Clone)]
 pub struct SingleLayer {
+    /// Regular expressions defining the domain patterns to be replaced in log lines.
     pub domain: Vec<Regex>,
-    // NumTokens -> First Token -> List of Log groups
+    /// The core storage for log groups, organized by log line length and first token.
     base_layer: HashMap<usize, HashMap<DefaultSymbol, Vec<LogGroup>>>,
+    /// The similarity threshold used to determine if a new log line matches an existing `LogGroup`.
     pub threshold: Ratio<BigInt>,
+    /// A shared string interner for efficient storage and comparison of log tokens.
     strings: Arc<RwLock<StringInterner<string_interner::backend::BucketBackend>>>,
 }
 
 impl SingleLayer {
+    /// Creates a new `SingleLayer` drain instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `domain` - A vector of strings, each representing a regular expression
+    ///   pattern to be used for preprocessing log lines. These patterns are replaced
+    ///   with a wildcard token before further processing.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the new `SingleLayer` instance on success, or an
+    /// `anyhow::Error` if any of the provided domain patterns are invalid regular expressions.
     #[instrument(skip(domain))]
     pub fn new(domain: Vec<String>) -> Result<Self, Error> {
         let patterns = domain
@@ -51,6 +66,21 @@ impl SingleLayer {
         })
     }
 
+    /// Sets the similarity threshold for the drain.
+    ///
+    /// This threshold determines how similar a new log line must be to an existing
+    /// `LogGroup`'s event template to be considered a match. The similarity is
+    /// calculated as a ratio of matching tokens to total tokens.
+    ///
+    /// # Arguments
+    ///
+    /// * `numerator` - The numerator of the similarity ratio.
+    /// * `denominator` - The denominator of the similarity ratio.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success, or an `anyhow::Error` if the numerator or denominator
+    /// cannot be converted into `BigInt`.
     #[instrument(skip(self))]
     pub fn set_threshold(&mut self, numerator: u64, denominator: u64) -> Result<(), Error> {
         let numer = BigInt::from_u64(numerator)
@@ -62,6 +92,14 @@ impl SingleLayer {
         Ok(())
     }
 
+    /// Iterates over all `LogGroup`s stored within the drain.
+    ///
+    /// This method provides a flattened view of all log groups, regardless of their
+    /// internal organization (by length and first token).
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<Vec<&LogGroup>>` containing references to all log groups.
     #[instrument(skip(self), level = "trace")]
     fn iter_groups(&self) -> Vec<Vec<&LogGroup>> {
         let mut results: Vec<Vec<&LogGroup>> = Vec::new();
@@ -77,6 +115,23 @@ impl SingleLayer {
         results
     }
 
+    /// Resolves a `DefaultSymbol` back into its original string representation.
+    ///
+    /// This is a utility method that uses the internal string interner to retrieve
+    /// the string associated with a given symbol.
+    ///
+    /// # Arguments
+    ///
+    /// * `sym` - The `DefaultSymbol` to resolve.
+    ///
+    /// # Returns
+    ///
+    /// A `String` representation of the symbol.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the symbol cannot be resolved, which should not happen under normal
+    /// operation as symbols are only created from interned strings.
     #[instrument(skip(self), level = "trace")]
     pub fn resolve(&self, sym: DefaultSymbol) -> String {
         self.strings
@@ -88,12 +143,23 @@ impl SingleLayer {
 }
 
 impl Drain for SingleLayer {
-    /// Accepts a line of input for processing against existing records
+    /// Processes a single log line, attempting to match it against existing log groups.
     ///
-    /// Return
-    /// Ok(true) when a new entry is added
-    /// Ok(false) when the line matched an existing entry
-    /// Err(e) for errors during processing
+    /// If the line is empty, it is ignored. Otherwise, it is converted into a `Record`.
+    /// The method then attempts to find a matching `LogGroup` based on the record's
+    /// length and first token. If a sufficiently similar `LogGroup` is found (based on
+    /// the `threshold`), the new record is added as an example to that group. If no
+    /// match is found, a new `LogGroup` is created for the record.
+    ///
+    /// # Arguments
+    ///
+    /// * `line` - The log line string to process.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(true)` if a new `LogGroup` was created.
+    /// * `Ok(false)` if the line was added to an existing `LogGroup`.
+    /// * `Err(anyhow::Error)` if an error occurred during processing.
     #[instrument(skip(self, line))]
     fn process_line(&mut self, line: String) -> Result<bool, Error> {
         if line.is_empty() {
@@ -145,12 +211,33 @@ impl Drain for SingleLayer {
         }
     }
 
+    /// Collects all `LogGroup`s currently stored in the drain.
+    ///
+    /// This method flattens the internal hierarchical storage of log groups
+    /// into a single vector.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<LogGroup>` containing clones of all log groups.
     fn collect_log_groups(&self) -> Vec<LogGroup> {
         self.iter_groups().into_iter().flatten().cloned().collect()
     }
 }
 
 impl fmt::Display for SingleLayer {
+    /// Formats the `SingleLayer` drain for display.
+    ///
+    /// This implementation provides a human-readable representation of the drain,
+    /// including its domain patterns, similarity threshold, and a list of all
+    /// contained log groups.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - The formatter to write into.
+    ///
+    /// # Returns
+    ///
+    /// A `fmt::Result` indicating success or failure of the formatting operation.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let base = format!(
             "SimpleDrain\nDomain Patterns: {:?}\nSimilarity Threshold: {}\n",

@@ -24,12 +24,28 @@ use crate::drains::simple::INTERNER;
 lazy_static! {
     pub static ref ASTERISK: DefaultSymbol = INTERNER.write().get_or_intern_static("<*>");
 }
+/// Represents a processed log record.
+///
+/// A `Record` consists of a `TokenStream` (the tokenized log line) and a
+/// unique identifier (`Uuid`).
 #[derive(Clone, Debug)]
 pub struct Record {
     pub(crate) inner: TokenStream,
     pub uid: Uuid,
 }
 impl Record {
+    /// Creates a new `Record` from a given log line string.
+    ///
+    /// This involves tokenizing the line and generating a new UUID (version 1)
+    /// for the record.
+    ///
+    /// # Arguments
+    ///
+    /// * `line` - The raw log line as a `String`.
+    ///
+    /// # Returns
+    ///
+    /// A new `Record` instance.
     #[instrument(name = "Create new record", level = "trace", skip(line))]
     pub fn new(line: String) -> Self {
         // Generate a V1 UUID (timestamp-based)
@@ -51,6 +67,19 @@ impl Record {
         }
     }
 
+    /// Calculates a similarity score between this `Record` (acting as a template)
+    /// and a `candidate` `Record`.
+    ///
+    /// The score is the number of matching tokens between the two records.
+    /// A `Token::Wildcard` in the template matches any token in the candidate.
+    ///
+    /// # Arguments
+    ///
+    /// * `candidate` - The `Record` to compare against this record.
+    ///
+    /// # Returns
+    ///
+    /// The similarity score as a `u64`.
     #[instrument(
         name = "Calculate similarity score",
         level = "trace",
@@ -97,21 +126,49 @@ impl Record {
             .count() as u64 // Count the number of matching token pairs
     }
 
+    /// Returns the first token of the record's `TokenStream`.
+    ///
+    /// # Returns
+    ///
+    /// An `Option<DefaultSymbol>` containing the first token if it exists, otherwise `None`.
     #[instrument(level = "trace", skip(self))]
     pub fn first(&self) -> Option<DefaultSymbol> {
         self.inner.first().map(std::convert::Into::into)
     }
 
+    /// Returns the number of tokens in the record's `TokenStream`.
+    ///
+    /// # Returns
+    ///
+    /// The length of the token stream as a `usize`.
     #[instrument(level = "trace", skip(self))]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
+    /// Checks if the record's `TokenStream` is empty.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the token stream is empty, `false` otherwise.
     #[instrument(level = "trace", skip(self))]
     pub fn is_empty(&self) -> bool {
         self.inner.len() == 0
     }
 
+    /// Resolves a `DefaultSymbol` back to its original string representation.
+    ///
+    /// This is a utility method that uses the global string interner to retrieve
+    /// the string associated with a given symbol.
+    ///
+    /// # Arguments
+    ///
+    /// * `sym` - The `DefaultSymbol` to resolve.
+    ///
+    /// # Returns
+    ///
+    /// An `Option<String>` containing the resolved string if the symbol exists,
+    /// otherwise `None`.
     #[instrument(level = "trace")]
     pub fn resolve(sym: DefaultSymbol) -> Option<String> {
         INTERNER
@@ -121,12 +178,11 @@ impl Record {
     }
 }
 
+/// An iterator that consumes a `Record` and yields its tokens as `String`s.
 pub struct IntoIter {
     record: Record,
     index: usize,
 }
-
-// RefIterator struct is removed as it's no longer used.
 
 impl Iterator for IntoIter {
     type Item = String;
@@ -159,8 +215,6 @@ impl IntoIterator for Record {
     }
 }
 
-// This iterator is used by LogGroup::discover_variables and LogGroup::update_variables
-// It should yield actual Token variants.
 impl<'a> IntoIterator for &'a Record {
     type Item = &'a Token; // Yields references to Tokens
     type IntoIter =
@@ -172,6 +226,18 @@ impl<'a> IntoIterator for &'a Record {
 }
 
 impl fmt::Display for Record {
+    /// Formats the `Record` for display.
+    ///
+    /// This implementation reconstructs the original log line from the `TokenStream`,
+    /// preserving whitespace.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - The formatter to write into.
+    ///
+    /// # Returns
+    ///
+    /// A `fmt::Result` indicating success or failure of the formatting operation.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.inner)
     }
