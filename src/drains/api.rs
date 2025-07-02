@@ -24,15 +24,15 @@ use anyhow::Error;
 pub trait Drain {
     /// Processes a single log line, potentially updating internal log group structures.
     ///
-    /// # Parameters
+    /// # Arguments
     ///
-    /// * `line`: A `String` representing the log line to be processed.
+    /// * `line` - A `String` representing the log line to be processed.
     ///
     /// # Returns
     ///
-    /// * `Ok(true)`: If processing the line resulted in the creation of a new `LogGroup`.
-    /// * `Ok(false)`: If the line was successfully processed and added to an existing `LogGroup`.
-    /// * `Err(anyhow::Error)`: If an error occurred during processing.
+    /// * `Ok(true)` if processing the line resulted in the creation of a new `LogGroup`.
+    /// * `Ok(false)` if the line was successfully processed and added to an existing `LogGroup`.
+    /// * `Err(anyhow::Error)` if an error occurred during processing.
     fn process_line(&mut self, line: String) -> Result<bool, Error>;
 
     /// Retrieves all unique `LogGroup`s currently managed by the drain.

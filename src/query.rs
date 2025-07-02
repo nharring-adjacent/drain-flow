@@ -36,31 +36,29 @@ pub struct LogStore<D: Drain> {
     drain: D,
 }
 
-// Default implementation removed as Drain doesn't have a Default bound
-
 impl<D: Drain> LogStore<D> {
     /// Creates a new `LogStore` with the given drain.
     ///
-    /// # Parameters
+    /// # Arguments
     ///
-    /// * `drain`: An instance of a type implementing the `Drain` trait, which will
+    /// * `drain` - An instance of a type implementing the `Drain` trait, which will
     ///   serve as the source of log data for this store.
+    ///
+    /// # Returns
+    ///
+    /// A new `LogStore` instance.
     pub fn new(drain: D) -> Self {
         Self { drain }
     }
-
-    // add_log_group removed as LogStore is initialized with a Drain instance
-
-    // from_log_groups removed as LogStore is initialized with a Drain instance
 
     /// Retrieves a specific `LogGroup` by its ID.
     ///
     /// This method queries the underlying drain for all its log groups and then
     /// searches for the one with the matching ID.
     ///
-    /// # Parameters
+    /// # Arguments
     ///
-    /// * `id`: The `Uuid` of the `LogGroup` to retrieve.
+    /// * `id` - The `Uuid` of the `LogGroup` to retrieve.
     ///
     /// # Returns
     ///
@@ -78,10 +76,10 @@ impl<D: Drain> LogStore<D> {
     /// This method queries the underlying drain for all its log groups and then
     /// filters them based on their timestamp.
     ///
-    /// # Parameters
+    /// # Arguments
     ///
-    /// * `start_time`: The `DateTime<Utc>` marking the beginning of the time range (inclusive).
-    /// * `end_time`: The `DateTime<Utc>` marking the end of the time range (inclusive).
+    /// * `start_time` - The `DateTime<Utc>` marking the beginning of the time range (inclusive).
+    /// * `end_time` - The `DateTime<Utc>` marking the end of the time range (inclusive).
     ///
     /// # Returns
     ///
@@ -104,27 +102,36 @@ impl<D: Drain> LogStore<D> {
 }
 
 // Define LogQL structures
+/// Represents a selector for log streams in LogQL queries.
 #[derive(Debug, Clone)]
 pub enum StreamSelector {
+    /// Selects log groups by a list of their unique identifiers.
     LogGroupIds(Vec<Uuid>),
 }
 
+/// Represents a line filter for LogQL queries.
 #[derive(Debug, Clone)]
 pub struct LineFilter {
+    /// The substring that log lines must contain to match the filter.
     pub contains: String,
 }
 
+/// Represents a LogQL query, combining a stream selector and an optional line filter.
 #[derive(Debug, Clone)]
 pub struct LogQlQuery {
+    /// The mechanism for selecting log streams (e.g., by group IDs).
     pub selector: StreamSelector,
+    /// An optional filter to apply to the content of log lines.
     pub filter: Option<LineFilter>,
 }
 
+/// Specifies the source of records for a query, either by a direct ID or a LogQL query.
 #[derive(Debug, Clone)]
 pub enum QuerySource {
+    /// Specifies a single log group by its unique identifier.
     ById(Uuid),
+    /// Specifies records to be fetched using a full LogQL query.
     ByLogQl(LogQlQuery),
-    // This was part of the original definitions to be restored
 }
 
 /// Executes a LogQL query against the provided `LogStore`.
@@ -136,10 +143,10 @@ pub enum QuerySource {
 /// Due to lifetime considerations with the `Drain` trait (which returns owned `LogGroup`s),
 /// this function returns a `Vec<Record>` (i.e., cloned, owned records) rather than references.
 ///
-/// # Parameters
+/// # Arguments
 ///
-/// * `log_store`: A reference to the `LogStore` instance to query.
-/// * `query`: A reference to the `LogQlQuery` defining the selection and filtering criteria.
+/// * `log_store` - A reference to the `LogStore` instance to query.
+/// * `query` - A reference to the `LogQlQuery` defining the selection and filtering criteria.
 ///
 /// # Returns
 ///
@@ -176,12 +183,12 @@ pub fn execute_logql_query<D: Drain>(log_store: &LogStore<D>, query: &LogQlQuery
 /// Similar to `execute_logql_query`, this function returns `Vec<Record>` (cloned records)
 /// to manage lifetimes correctly with data sourced from the `Drain`.
 ///
-/// # Parameters
+/// # Arguments
 ///
-/// * `log_store`: A reference to the `LogStore` instance.
-/// * `query_source`: A [`QuerySource`] enum indicating whether to fetch records by ID or by a LogQL query.
-/// * `start_time`: The `DateTime<Utc>` start of the aggregation range.
-/// * `end_time`: The `DateTime<Utc>` end of the aggregation range.
+/// * `log_store` - A reference to the `LogStore` instance.
+/// * `query_source` - A [`QuerySource`] enum indicating whether to fetch records by ID or by a LogQL query.
+/// * `start_time` - The `DateTime<Utc>` start of the aggregation range.
+/// * `end_time` - The `DateTime<Utc>` end of the aggregation range.
 ///
 /// # Returns
 ///
